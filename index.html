@@ -453,6 +453,7 @@
                 a.plus_trial_started_on,
                 a.activation_type,
                 a.primary_shop_plus_started_on_gmv_usd_l365d,
+                a.primary_shop_country,
                 b.contract_type
               FROM \`shopify-dw.mart_growth.admin_plus_metrics\` a
               LEFT JOIN \`shopify-dw.accounts_and_administration.organization_contract_pricing_info_current\` b 
@@ -483,8 +484,15 @@
                 pc.organization_id,
                 pc.primary_shop_id,
                 pc.plus_started_on,
+                pc.plus_trial_started_on,
+                pc.primary_shop_country,
+                pc.activation_type,
+                pc.primary_shop_plus_started_on_gmv_usd_l365d,
+                pc.contract_type,
                 pc.path_category,
                 bob.territory_name,
+                bob.account_id,
+                bob.date,
                 ROW_NUMBER() OVER (
                   PARTITION BY pc.organization_id
                   ORDER BY bob.date DESC
@@ -498,13 +506,18 @@
             activation_detail AS (
               SELECT
                 br.organization_id,
+                br.primary_shop_id,
+                br.plus_started_on,
+                br.plus_trial_started_on,
                 FORMAT_DATE('%Y-%m', br.plus_started_on) AS plus_started_month,
+                br.primary_shop_plus_started_on_gmv_usd_l365d,
+                br.activation_type,
+                br.contract_type,
                 br.path_category,
-                CASE 
-                  WHEN bpc.commercial_region_code IN ('EMEA', 'APAC') THEN bpc.commercial_region_code
-                  WHEN bpc.commercial_region_code IN ('Canada', 'US East', 'US West', 'LATAM', 'US') THEN 'AMER'
-                  ELSE 'Unknown'
-                END AS region_code,
+                br.primary_shop_country,
+                br.territory_name,
+                br.account_id,
+                srr.region,
                 CASE 
                   WHEN br.territory_name IS NULL OR br.territory_name = 'No Territory' THEN 0 
                   ELSE 1 
@@ -512,19 +525,21 @@
               FROM bob_ranked br
               LEFT JOIN \`shopify-dw.accounts_and_administration.business_platform_contracts\` bpc
                 ON br.organization_id = bpc.organization_id
+              LEFT JOIN \`shopify-dw.sales.sales_reporting_regions\` srr
+                ON br.primary_shop_country = srr.country_code
               WHERE br.rn = 1 OR br.rn IS NULL
             )
 
             SELECT
-              region_code,
+              region,
               plus_started_month AS month,
               path_category,
               COUNT(DISTINCT organization_id) AS total_activations,
               COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) AS in_bob_count,
               ROUND(100.0 * COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) / COUNT(DISTINCT organization_id), 1) AS in_bob_rate_pct
             FROM activation_detail
-            GROUP BY region_code, plus_started_month, path_category
-            ORDER BY region_code, plus_started_month, path_category
+            GROUP BY region, plus_started_month, path_category
+            ORDER BY region, plus_started_month, path_category
         `;
         
         // Color palette for path categories
@@ -623,7 +638,7 @@
                 });
                 
                 const chartData = result.results.map(row => ({
-                    region_code: row.region_code || 'Unknown',
+                    region: row.region || 'Unknown',
                     month: row.month,
                     path_category: row.path_category || 'Unknown',
                     total_activations: parseInt(row.total_activations) || 0,
@@ -661,7 +676,7 @@
         function renderDashboard(chartData) {
             const months = [...new Set(chartData.map(d => d.month))].sort();
             const pathCategories = [...new Set(chartData.map(d => d.path_category))].sort();
-            const regions = [...new Set(chartData.map(d => d.region_code))].sort();
+            const regions = [...new Set(chartData.map(d => d.region))].sort();
             
             // Calculate totals (deduplicated by summing unique combinations)
             const totalActivations = chartData.reduce((sum, d) => sum + d.total_activations, 0);
@@ -680,7 +695,7 @@
             const totalsByRegion = {};
             regions.forEach(region => {
                 totalsByRegion[region] = chartData
-                    .filter(d => d.region_code === region)
+                    .filter(d => d.region === region)
                     .reduce((sum, d) => sum + d.total_activations, 0);
             });
             
@@ -950,7 +965,7 @@
                 label: region,
                 data: months.map(m => {
                     const regionTotal = chartData
-                        .filter(d => d.month === m && d.region_code === region)
+                        .filter(d => d.month === m && d.region === region)
                         .reduce((sum, d) => sum + d.total_activations, 0);
                     const total = monthlyTotals[m];
                     return total > 0 ? ((regionTotal / total) * 100).toFixed(1) : 0;
@@ -1030,17 +1045,17 @@
             
             const sortedData = [...chartData].sort((a, b) => 
                 b.month.localeCompare(a.month) || 
-                a.region_code.localeCompare(b.region_code) ||
+                (a.region || '').localeCompare(b.region || '') ||
                 a.path_category.localeCompare(b.path_category)
             );
             
             sortedData.forEach(row => {
                 const tr = document.createElement('tr');
                 const pathBadgeClass = getBadgeClass(row.path_category);
-                const regionBadgeClass = getRegionBadgeClass(row.region_code);
+                const regionBadgeClass = getRegionBadgeClass(row.region);
                 tr.innerHTML = `
                     <td>${row.month}</td>
-                    <td><span class="badge ${regionBadgeClass}">${row.region_code}</span></td>
+                    <td><span class="badge ${regionBadgeClass}">${row.region || 'Unknown'}</span></td>
                     <td><span class="badge ${pathBadgeClass}">${row.path_category}</span></td>
                     <td>${row.total_activations.toLocaleString()}</td>
                     <td>${row.in_bob_count.toLocaleString()}</td>
