@@ -388,30 +388,16 @@
                 </div>
             </div>
             
-            <!-- BOB Rate and Region Charts Side by Side -->
-            <div class="charts-grid">
-                <div class="chart-section">
-                    <div class="chart-header">
-                        <div>
-                        <h2 class="chart-title">📈 BOB Rate by Path</h2>
-                        <p class="chart-subtitle">% in sales territory at activation time</p>
-                        </div>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="matchRateChart"></canvas>
+            <!-- BOB Rate Chart -->
+            <div class="chart-section">
+                <div class="chart-header">
+                    <div>
+                    <h2 class="chart-title">📈 BOB Rate by Path</h2>
+                    <p class="chart-subtitle">% in sales territory at activation time</p>
                     </div>
                 </div>
-                
-                <div class="chart-section">
-                    <div class="chart-header">
-                        <div>
-                            <h2 class="chart-title">🌍 Regional Mix</h2>
-                            <p class="chart-subtitle">Activation share by region over time</p>
-                        </div>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="mixChart"></canvas>
-                    </div>
+                <div class="chart-container">
+                    <canvas id="matchRateChart"></canvas>
                 </div>
             </div>
             
@@ -592,7 +578,6 @@
         
         let volumeChart = null;
         let matchRateChart = null;
-        let mixChart = null;
         let leadsChart = null;
         
         // ===========================================
@@ -749,7 +734,6 @@
             // Render charts
             renderVolumeChart(chartData, months, pathCategories);
             renderBobRateChart(chartData, months, pathCategories);
-            renderRegionChart(chartData, months, regions);
             renderLeadsChart(leadsData);
             renderTable(chartData);
         }
@@ -977,77 +961,6 @@
                         },
                         y: {
                             beginAtZero: true,
-                            max: 100,
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: {
-                                color: '#666',
-                                font: { family: 'Space Mono', size: 10 },
-                                callback: v => v + '%'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        function renderRegionChart(chartData, months, regions) {
-            const ctx = document.getElementById('mixChart').getContext('2d');
-            
-            if (mixChart) mixChart.destroy();
-            
-            // Calculate monthly totals first
-            const monthlyTotals = {};
-            months.forEach(m => {
-                monthlyTotals[m] = chartData
-                    .filter(d => d.month === m)
-                    .reduce((sum, d) => sum + d.total_activations, 0);
-            });
-            
-            const datasets = regions.map(region => ({
-                label: region,
-                data: months.map(m => {
-                    const regionTotal = chartData
-                        .filter(d => d.month === m && d.region === region)
-                        .reduce((sum, d) => sum + d.total_activations, 0);
-                    const total = monthlyTotals[m];
-                    return total > 0 ? ((regionTotal / total) * 100).toFixed(1) : 0;
-                }),
-                backgroundColor: REGION_COLORS[region]?.bg || 'rgba(136, 136, 136, 0.8)',
-                borderColor: REGION_COLORS[region]?.border || '#888',
-                borderWidth: 0
-            }));
-            
-            mixChart = new Chart(ctx, {
-                type: 'bar',
-                data: { labels: months, datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                            labels: {
-                                color: '#888',
-                                font: { family: 'Space Mono', size: 10 },
-                                usePointStyle: true,
-                                padding: 12,
-                                boxWidth: 8
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y + '%'
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            stacked: true,
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#666', font: { family: 'Space Mono', size: 10 } }
-                        },
-                        y: {
-                            stacked: true,
                             max: 100,
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
                             ticks: {
