@@ -348,6 +348,35 @@
         #dashboard-content {
             display: none;
         }
+        
+        .filter-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.75rem;
+            color: #aaa;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .filter-checkbox:hover {
+            border-color: rgba(0, 245, 212, 0.4);
+        }
+        
+        .filter-checkbox:has(input:checked) {
+            background: rgba(0, 245, 212, 0.15);
+            border-color: rgba(0, 245, 212, 0.5);
+            color: #00f5d4;
+        }
+        
+        .filter-checkbox input {
+            accent-color: #00f5d4;
+        }
     </style>
 </head>
 <body>
@@ -366,15 +395,24 @@
         
         <!-- Dashboard Content (hidden until data loads) -->
         <div id="dashboard-content">
-            <!-- Region Filter -->
-            <div class="filter-section" style="margin-bottom: 30px;">
-                <label style="font-family: 'Space Mono', monospace; font-size: 0.8rem; color: #888; margin-right: 12px;">FILTER BY REGION:</label>
-                <select id="regionFilter" onchange="applyRegionFilter()" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 16px; border-radius: 6px; font-family: 'Space Mono', monospace; font-size: 0.85rem; cursor: pointer;">
-                    <option value="ALL">All Regions</option>
-                    <option value="AMER">AMER</option>
-                    <option value="EMEA">EMEA</option>
-                    <option value="APAC">APAC</option>
-                </select>
+            <!-- Filters -->
+            <div class="filter-section" style="margin-bottom: 30px; display: flex; gap: 30px; flex-wrap: wrap; align-items: center;">
+                <div>
+                    <label style="font-family: 'Space Mono', monospace; font-size: 0.75rem; color: #888; display: block; margin-bottom: 8px;">REGION (multi-select)</label>
+                    <div id="regionFilter" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <label class="filter-checkbox"><input type="checkbox" value="AMER" checked onchange="applyFilters()"> AMER</label>
+                        <label class="filter-checkbox"><input type="checkbox" value="EMEA" checked onchange="applyFilters()"> EMEA</label>
+                        <label class="filter-checkbox"><input type="checkbox" value="APAC" checked onchange="applyFilters()"> APAC</label>
+                    </div>
+                </div>
+                <div>
+                    <label style="font-family: 'Space Mono', monospace; font-size: 0.75rem; color: #888; display: block; margin-bottom: 8px;">PATH CATEGORY (multi-select)</label>
+                    <div id="pathFilter" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <label class="filter-checkbox"><input type="checkbox" value="Self-serve Trial" checked onchange="applyFilters()"> Self-serve Trial</label>
+                        <label class="filter-checkbox"><input type="checkbox" value="Self-serve Admin" checked onchange="applyFilters()"> Self-serve Admin</label>
+                        <label class="filter-checkbox"><input type="checkbox" value="Non Self-Serve" checked onchange="applyFilters()"> Non Self-Serve</label>
+                    </div>
+                </div>
             </div>
             
             <!-- Volume Chart -->
@@ -412,8 +450,8 @@
             <div class="chart-section">
                 <div class="chart-header">
                     <div>
-                        <h2 class="chart-title">% of Plus Leads Routed to Self-Serve since Jan 01, 2026</h2>
-                        <p class="chart-subtitle">Daily breakdown by region</p>
+                        <h2 class="chart-title">Plus Leads Volume since Jan 01, 2026</h2>
+                        <p class="chart-subtitle">Daily lead count by region</p>
                     </div>
                 </div>
                 <div class="chart-container">
@@ -425,23 +463,6 @@
                 </div>
             </div>
             
-            <div class="chart-section">
-                <h2 class="chart-title">Detailed Breakdown by Region, Month & Path</h2>
-                <table class="data-table" id="dataTable">
-                    <thead>
-                        <tr>
-                            <th>Month</th>
-                            <th>Region</th>
-                            <th>Path Category</th>
-                            <th>Total</th>
-                            <th>In BOB</th>
-                            <th>BOB Rate</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tableBody">
-                    </tbody>
-                </table>
-            </div>
         </div>
         
         <footer>
@@ -710,18 +731,28 @@
         // Dashboard Rendering
         // ===========================================
         
-        function renderDashboard(chartData, leadsData, selectedRegion = 'ALL') {
+        function renderDashboard(chartData, leadsData, selectedRegions = null, selectedPaths = null) {
             // Store globally for filtering
             globalChartData = chartData;
             globalLeadsData = leadsData;
             
-            // Filter data by region
-            const filteredChartData = selectedRegion === 'ALL' 
-                ? chartData 
-                : chartData.filter(d => d.region === selectedRegion);
+            // Get selected filters (default to all)
+            if (!selectedRegions) {
+                selectedRegions = ['AMER', 'EMEA', 'APAC'];
+            }
+            if (!selectedPaths) {
+                selectedPaths = ['Self-serve Trial', 'Self-serve Admin', 'Non Self-Serve'];
+            }
+            
+            // Filter data
+            const filteredChartData = chartData.filter(d => 
+                selectedRegions.includes(d.region) && selectedPaths.includes(d.path_category)
+            );
             
             const months = [...new Set(filteredChartData.map(d => d.month))].sort();
-            const pathCategories = [...new Set(filteredChartData.map(d => d.path_category))].sort();
+            const pathCategories = selectedPaths.filter(p => 
+                filteredChartData.some(d => d.path_category === p)
+            );
             
             // Generate insight
             const totalsByCategory = {};
@@ -736,14 +767,15 @@
             // Render charts
             renderVolumeChart(filteredChartData, months, pathCategories);
             renderBobRateChart(filteredChartData, months, pathCategories);
-            renderLeadsChart(leadsData, selectedRegion);
-            renderTable(filteredChartData);
+            renderLeadsChart(leadsData, selectedRegions);
         }
         
-        function applyRegionFilter() {
-            const selectedRegion = document.getElementById('regionFilter').value;
+        function applyFilters() {
+            const selectedRegions = Array.from(document.querySelectorAll('#regionFilter input:checked')).map(cb => cb.value);
+            const selectedPaths = Array.from(document.querySelectorAll('#pathFilter input:checked')).map(cb => cb.value);
+            
             if (globalChartData && globalLeadsData) {
-                renderDashboard(globalChartData, globalLeadsData, selectedRegion);
+                renderDashboard(globalChartData, globalLeadsData, selectedRegions, selectedPaths);
             }
         }
         
@@ -983,29 +1015,23 @@
             });
         }
         
-        function renderLeadsChart(leadsData, selectedRegion = 'ALL') {
+        function renderLeadsChart(leadsData, selectedRegions = ['AMER', 'EMEA', 'APAC']) {
             const ctx = document.getElementById('leadsChart').getContext('2d');
             
             if (leadsChart) leadsChart.destroy();
             
-            // Filter by region if selected
-            const filteredData = selectedRegion === 'ALL' ? leadsData : leadsData.filter(d => d.region === selectedRegion);
+            // Filter by selected regions
+            const filteredData = leadsData.filter(d => selectedRegions.includes(d.region));
             
             // Get unique dates and regions
             const dates = [...new Set(filteredData.map(d => d.date))].sort();
-            const regions = selectedRegion === 'ALL' 
-                ? [...new Set(filteredData.map(d => d.region))].sort()
-                : [selectedRegion];
+            const regions = selectedRegions.filter(r => filteredData.some(d => d.region === r));
             
-            // Calculate self-serve rate for each region and date
+            // Calculate total leads volume for each region and date
             const datasets = regions.map(region => {
                 const data = dates.map(d => {
                     const regionDateData = filteredData.filter(row => row.date === d && row.region === region);
-                    const totalLeads = regionDateData.reduce((sum, row) => sum + row.lead_cnt, 0);
-                    const selfServeLeads = regionDateData
-                        .filter(row => row.routing_segment && row.routing_segment.toLowerCase() === 'self-serve')
-                        .reduce((sum, row) => sum + row.lead_cnt, 0);
-                    return totalLeads > 0 ? (100.0 * selfServeLeads / totalLeads).toFixed(1) : null;
+                    return regionDateData.reduce((sum, row) => sum + row.lead_cnt, 0);
                 });
                 return {
                     label: region,
@@ -1018,7 +1044,7 @@
                     pointBackgroundColor: REGION_COLORS[region]?.border || '#888',
                     pointBorderColor: '#fff',
                     pointBorderWidth: 1,
-                    fill: false,
+                    fill: true,
                     spanGaps: true
                 };
             });
@@ -1042,23 +1068,25 @@
                         },
                         tooltip: {
                             callbacks: {
-                                label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y || 'N/A') + '% self-serve'
+                                label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y || 0).toLocaleString() + ' leads'
                             }
                         }
                     },
                     scales: {
                         x: {
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#666', font: { family: 'Space Mono', size: 11 } }
+                            ticks: { 
+                                color: '#666', 
+                                font: { family: 'Space Mono', size: 10 },
+                                maxTicksLimit: 15
+                            }
                         },
                         y: {
                             beginAtZero: true,
-                            max: 100,
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
                             ticks: {
                                 color: '#666',
-                                font: { family: 'Space Mono', size: 11 },
-                                callback: v => v + '%'
+                                font: { family: 'Space Mono', size: 11 }
                             }
                         }
                     }
@@ -1070,28 +1098,23 @@
         }
         
         function generateLeadsInsight(leadsData, dates, regions) {
-            // Calculate overall self-serve rate
+            // Calculate total leads
             const totalLeads = leadsData.reduce((sum, d) => sum + d.lead_cnt, 0);
-            const selfServeLeads = leadsData
-                .filter(d => d.routing_segment && d.routing_segment.toLowerCase() === 'self-serve')
-                .reduce((sum, d) => sum + d.lead_cnt, 0);
-            const overallRate = totalLeads > 0 ? (100.0 * selfServeLeads / totalLeads).toFixed(1) : 0;
             
-            // Find region with highest self-serve rate
-            const regionRates = regions.map(region => {
+            // Find region with highest volume
+            const regionVolumes = regions.map(region => {
                 const regionData = leadsData.filter(d => d.region === region);
                 const total = regionData.reduce((sum, d) => sum + d.lead_cnt, 0);
-                const selfServe = regionData
-                    .filter(d => d.routing_segment && d.routing_segment.toLowerCase() === 'self-serve')
-                    .reduce((sum, d) => sum + d.lead_cnt, 0);
-                return { region, rate: total > 0 ? (100.0 * selfServe / total) : 0 };
-            }).sort((a, b) => b.rate - a.rate);
+                return { region, total };
+            }).sort((a, b) => b.total - a.total);
             
-            const topRegion = regionRates[0];
+            const topRegion = regionVolumes[0];
+            const avgDaily = dates.length > 0 ? Math.round(totalLeads / dates.length) : 0;
             
             let insightText = `
-                Overall, <strong>${overallRate}%</strong> of new Plus leads are routed as self-serve.
-                <strong>${topRegion.region}</strong> has the highest self-serve rate at <strong>${topRegion.rate.toFixed(1)}%</strong>.
+                <strong>${totalLeads.toLocaleString()}</strong> total Plus leads since Jan 2026.
+                Average <strong>${avgDaily.toLocaleString()}</strong> leads/day.
+                <strong>${topRegion?.region || 'N/A'}</strong> leads with <strong>${topRegion?.total?.toLocaleString() || 0}</strong> leads.
             `;
             
             document.getElementById('leads-insight-text').innerHTML = insightText;
