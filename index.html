@@ -415,6 +415,23 @@
                 </div>
             </div>
             
+            <!-- Leads Self-Serve Rate Chart -->
+            <div class="chart-section">
+                <div class="chart-header">
+                    <div>
+                        <h2 class="chart-title">🎯 Plus Leads Self-Serve Rate by Region</h2>
+                        <p class="chart-subtitle">% of new Plus leads with routing_segment = 'self-serve'</p>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="leadsChart"></canvas>
+                </div>
+                <div class="insight-box" id="leads-insight">
+                    <div class="insight-title">💡 Leads Insight</div>
+                    <div class="insight-text" id="leads-insight-text">Loading...</div>
+                </div>
+            </div>
+            
             <div class="chart-section">
                 <h2 class="chart-title">Detailed Breakdown by Region, Month & Path</h2>
                 <table class="data-table" id="dataTable">
@@ -542,6 +559,21 @@
             ORDER BY region, plus_started_month, path_category
         `;
         
+        // Query for leads self-serve rate by region
+        const LEADS_QUERY = `
+            SELECT 
+              FORMAT_DATE('%Y-%m', created_at) AS created_mth,
+              CASE WHEN reporting_region IN ('AMER', 'LATAM') OR reporting_region IS NULL THEN 'AMER' ELSE reporting_region END AS region,
+              routing_segment,
+              COUNT(lead_id) AS lead_cnt
+            FROM \`shopify-dw.sales.sales_leads\`
+            WHERE primary_product_interest_at_lead_creation = 'Plus'
+              AND NOT is_shopify_customer
+              AND created_at >= '2025-01-01'
+            GROUP BY 1, 2, 3
+            ORDER BY 1, 2, 3
+        `;
+        
         // Color palette for path categories
         const PATH_COLORS = {
             'Self-serve Trial': { bg: 'rgba(123, 44, 191, 0.8)', border: '#7b2cbf', text: '#b388ff' },
@@ -561,6 +593,7 @@
         let volumeChart = null;
         let matchRateChart = null;
         let mixChart = null;
+        let leadsChart = null;
         
         // ===========================================
         // Initialization
@@ -632,12 +665,13 @@
             `;
             
             try {
-                const result = await quick.dw.querySync(MATCH_RATE_QUERY, [], {
-                    timeoutMs: 60000,
-                    maxResults: 1000
-                });
+                // Fetch both queries in parallel
+                const [activationsResult, leadsResult] = await Promise.all([
+                    quick.dw.querySync(MATCH_RATE_QUERY, [], { timeoutMs: 60000, maxResults: 1000 }),
+                    quick.dw.querySync(LEADS_QUERY, [], { timeoutMs: 60000, maxResults: 1000 })
+                ]);
                 
-                const chartData = result.results.map(row => ({
+                const chartData = activationsResult.results.map(row => ({
                     region: row.region || 'Unknown',
                     month: row.month,
                     path_category: row.path_category || 'Unknown',
@@ -646,10 +680,17 @@
                     in_bob_rate_pct: parseFloat(row.in_bob_rate_pct) || 0
                 }));
                 
+                const leadsData = leadsResult.results.map(row => ({
+                    month: row.created_mth,
+                    region: row.region || 'Unknown',
+                    routing_segment: row.routing_segment || 'Unknown',
+                    lead_cnt: parseInt(row.lead_cnt) || 0
+                }));
+                
                 authSection.style.display = 'none';
                 dashboardContent.style.display = 'block';
                 
-                renderDashboard(chartData);
+                renderDashboard(chartData, leadsData);
                 
                 document.getElementById('lastUpdated').textContent = 
                     `Last updated: ${new Date().toLocaleString()}`;
@@ -673,7 +714,7 @@
         // Dashboard Rendering
         // ===========================================
         
-        function renderDashboard(chartData) {
+        function renderDashboard(chartData, leadsData) {
             const months = [...new Set(chartData.map(d => d.month))].sort();
             const pathCategories = [...new Set(chartData.map(d => d.path_category))].sort();
             const regions = [...new Set(chartData.map(d => d.region))].sort();
@@ -709,6 +750,7 @@
             renderVolumeChart(chartData, months, pathCategories);
             renderBobRateChart(chartData, months, pathCategories);
             renderRegionChart(chartData, months, regions);
+            renderLeadsChart(leadsData);
             renderTable(chartData);
         }
         
@@ -1017,6 +1059,115 @@
                     }
                 }
             });
+        }
+        
+        function renderLeadsChart(leadsData) {
+            const ctx = document.getElementById('leadsChart').getContext('2d');
+            
+            if (leadsChart) leadsChart.destroy();
+            
+            // Get unique months and regions
+            const months = [...new Set(leadsData.map(d => d.month))].sort();
+            const regions = [...new Set(leadsData.map(d => d.region))].sort();
+            
+            // Calculate self-serve rate for each region and month
+            const datasets = regions.map(region => {
+                const data = months.map(m => {
+                    const regionMonthData = leadsData.filter(d => d.month === m && d.region === region);
+                    const totalLeads = regionMonthData.reduce((sum, d) => sum + d.lead_cnt, 0);
+                    const selfServeLeads = regionMonthData
+                        .filter(d => d.routing_segment && d.routing_segment.toLowerCase() === 'self-serve')
+                        .reduce((sum, d) => sum + d.lead_cnt, 0);
+                    return totalLeads > 0 ? (100.0 * selfServeLeads / totalLeads).toFixed(1) : null;
+                });
+                return {
+                    label: region,
+                    data: data,
+                    borderColor: REGION_COLORS[region]?.border || '#888',
+                    backgroundColor: REGION_COLORS[region]?.bg || 'rgba(136, 136, 136, 0.3)',
+                    tension: 0.4,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    pointBackgroundColor: REGION_COLORS[region]?.border || '#888',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    fill: false,
+                    spanGaps: true
+                };
+            });
+            
+            leadsChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: months, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                color: '#888',
+                                font: { family: 'Space Mono', size: 11 },
+                                usePointStyle: true,
+                                padding: 16
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y || 'N/A') + '% self-serve'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#666', font: { family: 'Space Mono', size: 11 } }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: {
+                                color: '#666',
+                                font: { family: 'Space Mono', size: 11 },
+                                callback: v => v + '%'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Generate leads insight
+            generateLeadsInsight(leadsData, months, regions);
+        }
+        
+        function generateLeadsInsight(leadsData, months, regions) {
+            // Calculate overall self-serve rate
+            const totalLeads = leadsData.reduce((sum, d) => sum + d.lead_cnt, 0);
+            const selfServeLeads = leadsData
+                .filter(d => d.routing_segment && d.routing_segment.toLowerCase() === 'self-serve')
+                .reduce((sum, d) => sum + d.lead_cnt, 0);
+            const overallRate = totalLeads > 0 ? (100.0 * selfServeLeads / totalLeads).toFixed(1) : 0;
+            
+            // Find region with highest self-serve rate
+            const regionRates = regions.map(region => {
+                const regionData = leadsData.filter(d => d.region === region);
+                const total = regionData.reduce((sum, d) => sum + d.lead_cnt, 0);
+                const selfServe = regionData
+                    .filter(d => d.routing_segment && d.routing_segment.toLowerCase() === 'self-serve')
+                    .reduce((sum, d) => sum + d.lead_cnt, 0);
+                return { region, rate: total > 0 ? (100.0 * selfServe / total) : 0 };
+            }).sort((a, b) => b.rate - a.rate);
+            
+            const topRegion = regionRates[0];
+            
+            let insightText = `
+                Overall, <strong>${overallRate}%</strong> of new Plus leads are routed as self-serve.
+                <strong>${topRegion.region}</strong> has the highest self-serve rate at <strong>${topRegion.rate.toFixed(1)}%</strong>.
+            `;
+            
+            document.getElementById('leads-insight-text').innerHTML = insightText;
         }
         
         function getBadgeClass(pathCategory) {
