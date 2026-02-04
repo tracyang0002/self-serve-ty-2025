@@ -470,7 +470,7 @@
             <div class="chart-section">
                 <div class="chart-header">
                     <div>
-                        <h2 class="chart-title">Plus Leads Volume since Jan 01, 2026</h2>
+                        <h2 class="chart-title">Plus Leads Volume since Jan 01, 2025</h2>
                         <p class="chart-subtitle">Daily lead count by region</p>
                     </div>
                 </div>
@@ -593,7 +593,7 @@
             ORDER BY region, plus_started_month, path_category
         `;
         
-        // Query for leads self-serve rate by region (daily from 2026)
+        // Query for leads volume by region (daily from 2025)
         const LEADS_QUERY = `
             SELECT 
               FORMAT_DATE('%Y-%m-%d', created_at) AS created_date,
@@ -603,7 +603,7 @@
             FROM \`shopify-dw.sales.sales_leads\`
             WHERE primary_product_interest_at_lead_creation = 'Plus'
               AND NOT is_shopify_customer
-              AND created_at >= '2026-01-01'
+              AND created_at >= '2025-01-01'
             GROUP BY 1, 2, 3
             ORDER BY 1, 2, 3
         `;
@@ -1161,7 +1161,7 @@
             const avgDaily = dates.length > 0 ? Math.round(totalLeads / dates.length) : 0;
             
             let insightText = `
-                <strong>${totalLeads.toLocaleString()}</strong> total Plus leads since Jan 2026.
+                <strong>${totalLeads.toLocaleString()}</strong> total Plus leads since Jan 2025.
                 Average <strong>${avgDaily.toLocaleString()}</strong> leads/day.
                 <strong>${topRegion?.region || 'N/A'}</strong> leads with <strong>${topRegion?.total?.toLocaleString() || 0}</strong> leads.
             `;
