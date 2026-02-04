@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plus Activations BOB Attribution Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Quick.js for BigQuery integration -->
+    <script src="/client/quick.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Syne', sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+            padding: 40px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            position: relative;
+        }
+        
+        header::before {
+            content: '';
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 4px;
+            background: linear-gradient(90deg, #00f5d4, #7b2cbf);
+            border-radius: 2px;
+        }
+        
+        h1 {
+            font-size: 2.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00f5d4 0%, #7b2cbf 50%, #f72585 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            letter-spacing: -1px;
+        }
+        
+        .subtitle {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.9rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        
+        .loading-container {
+            text-align: center;
+            padding: 60px;
+        }
+        
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(0, 245, 212, 0.2);
+            border-top-color: #00f5d4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            font-family: 'Space Mono', monospace;
+            color: #888;
+        }
+        
+        .auth-button {
+            display: inline-block;
+            padding: 16px 32px;
+            background: linear-gradient(135deg, #00f5d4, #7b2cbf);
+            color: #0a0a0a;
+            font-family: 'Syne', sans-serif;
+            font-weight: 600;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .auth-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 245, 212, 0.3);
+        }
+        
+        .error-message {
+            background: rgba(247, 37, 133, 0.1);
+            border: 1px solid rgba(247, 37, 133, 0.3);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            color: #f72585;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 50px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(0, 245, 212, 0.3);
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #00f5d4, #7b2cbf);
+        }
+        
+        .stat-label {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.65rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+        
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #00f5d4;
+            line-height: 1;
+        }
+        
+        .stat-value.purple { color: #7b2cbf; }
+        .stat-value.pink { color: #f72585; }
+        .stat-value.yellow { color: #ffd60a; }
+        .stat-value.cyan { color: #00f5d4; }
+        .stat-value.orange { color: #ff9f1c; }
+        .stat-value.blue { color: #4cc9f0; }
+        .stat-value.green { color: #06d6a0; }
+        
+        .chart-section {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 40px;
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        
+        .chart-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #fff;
+        }
+        
+        .chart-subtitle {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 6px;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 380px;
+        }
+        
+        .chart-container-tall {
+            height: 450px;
+        }
+        
+        .insight-box {
+            background: rgba(0, 245, 212, 0.08);
+            border: 1px solid rgba(0, 245, 212, 0.2);
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin-top: 24px;
+        }
+        
+        .insight-title {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.75rem;
+            color: #00f5d4;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+        
+        .insight-text {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: #ccc;
+        }
+        
+        .insight-text strong {
+            color: #fff;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 40px;
+        }
+        
+        .data-table th,
+        .data-table td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        
+        .data-table th {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #666;
+            font-weight: 400;
+        }
+        
+        .data-table td {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
+        }
+        
+        .data-table tr:hover td {
+            background: rgba(0, 245, 212, 0.05);
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        
+        .badge.trial { background: rgba(123, 44, 191, 0.2); color: #b388ff; }
+        .badge.skip-trial { background: rgba(0, 245, 212, 0.2); color: #00f5d4; }
+        .badge.sales-assisted { background: rgba(255, 159, 28, 0.2); color: #ff9f1c; }
+        .badge.other { background: rgba(136, 136, 136, 0.2); color: #888; }
+        
+        .match-rate-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        
+        .match-rate-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00f5d4, #7b2cbf);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 40px;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+            color: #444;
+        }
+        
+        .refresh-button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+        
+        .refresh-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .last-updated {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 10px;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        
+        @media (max-width: 1100px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        #dashboard-content {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Plus Activations BOB Attribution</h1>
+            <p class="subtitle">Territory Coverage at Activation Time • 2025</p>
+            <p class="last-updated" id="lastUpdated"></p>
+        </header>
+        
+        <!-- Auth/Loading State -->
+        <div id="auth-section" class="loading-container">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">Initializing...</p>
+        </div>
+        
+        <!-- Dashboard Content (hidden until data loads) -->
+        <div id="dashboard-content">
+            <div class="stats-grid" id="stats-grid">
+                <!-- Stats will be dynamically generated -->
+            </div>
+            
+            <!-- Volume Chart -->
+            <div class="chart-section">
+                <div class="chart-header">
+                    <div>
+                        <h2 class="chart-title">📊 Activation Volume by Path</h2>
+                        <p class="chart-subtitle">Monthly activations breakdown by path_category</p>
+                    </div>
+                    <button class="refresh-button" onclick="loadData()">↻ Refresh Data</button>
+                </div>
+                <div class="chart-container chart-container-tall">
+                    <canvas id="volumeChart"></canvas>
+                </div>
+                <div class="insight-box" id="volume-insight">
+                    <div class="insight-title">💡 Key Insight</div>
+                    <div class="insight-text" id="volume-insight-text">Loading...</div>
+                </div>
+            </div>
+            
+            <!-- BOB Rate and Region Charts Side by Side -->
+            <div class="charts-grid">
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <div>
+                        <h2 class="chart-title">📈 BOB Rate by Path</h2>
+                        <p class="chart-subtitle">% in sales territory at activation time</p>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="matchRateChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <div>
+                            <h2 class="chart-title">🌍 Regional Mix</h2>
+                            <p class="chart-subtitle">Activation share by region over time</p>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="mixChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chart-section">
+                <h2 class="chart-title">Detailed Breakdown by Region, Month & Path</h2>
+                <table class="data-table" id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Region</th>
+                            <th>Path Category</th>
+                            <th>Total</th>
+                            <th>In BOB</th>
+                            <th>BOB Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <footer>
+            Built with 💜 for BOB Attribution Analysis • Powered by Quick + BigQuery
+        </footer>
+    </div>
+    
+    <script>
+        // ===========================================
+        // Configuration - 2025 onwards, using trial_type_label
+        // ===========================================
+        
+        const MATCH_RATE_QUERY = `
+            WITH plus_base AS (
+              SELECT
+                a.organization_id,
+                a.primary_shop_id,
+                a.plus_started_on,
+                a.plus_trial_started_on,
+                a.activation_type,
+                a.primary_shop_plus_started_on_gmv_usd_l365d,
+                b.contract_type
+              FROM \`shopify-dw.mart_growth.admin_plus_metrics\` a
+              LEFT JOIN \`shopify-dw.accounts_and_administration.organization_contract_pricing_info_current\` b 
+                ON a.organization_id = b.organization_id
+              WHERE plus_started_on >= '2025-01-01'
+                AND plus_started_on < '2026-01-01'
+            ),
+
+            skip_trial_shops AS (
+              SELECT DISTINCT shop_id
+              FROM \`shopify-dw.mart_growth.admin_plus_activation_funnel\`
+            ),
+
+            plus_cohort AS (
+              SELECT 
+                a.*,
+                CASE 
+                  WHEN a.plus_trial_started_on IS NOT NULL THEN 'Trial'
+                  WHEN b.shop_id IS NOT NULL THEN 'Admin Channel'
+                  ELSE 'Sales Assisted'
+                END AS path_category
+              FROM plus_base a
+              LEFT JOIN skip_trial_shops b ON a.primary_shop_id = b.shop_id
+            ),
+
+            bob_ranked AS (
+              SELECT
+                pc.organization_id,
+                pc.primary_shop_id,
+                pc.plus_started_on,
+                pc.path_category,
+                bob.territory_name,
+                ROW_NUMBER() OVER (
+                  PARTITION BY pc.organization_id
+                  ORDER BY bob.date DESC
+                ) AS rn
+              FROM plus_cohort pc
+              LEFT JOIN \`sdp-stg-commercial.lucasmiller_scratch.account_territory_daily_snapshot\` bob
+                ON CAST(pc.organization_id AS STRING) = bob.organization_id
+                AND bob.date < pc.plus_started_on
+            ),
+
+            activation_detail AS (
+              SELECT
+                br.organization_id,
+                FORMAT_DATE('%Y-%m', br.plus_started_on) AS plus_started_month,
+                br.path_category,
+                CASE 
+                  WHEN bpc.commercial_region_code IN ('EMEA', 'APAC') THEN bpc.commercial_region_code
+                  WHEN bpc.commercial_region_code IN ('Canada', 'US East', 'US West', 'LATAM') THEN 'AMER'
+                  ELSE 'Unknown'
+                END AS region_code,
+                CASE 
+                  WHEN br.territory_name IS NULL OR br.territory_name = 'No Territory' THEN 0 
+                  ELSE 1 
+                END AS in_bob
+              FROM bob_ranked br
+              LEFT JOIN \`shopify-dw.accounts_and_administration.business_platform_contracts\` bpc
+                ON br.organization_id = bpc.organization_id
+              WHERE br.rn = 1 OR br.rn IS NULL
+            )
+
+            SELECT
+              region_code,
+              plus_started_month AS month,
+              path_category,
+              COUNT(DISTINCT organization_id) AS total_activations,
+              COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) AS in_bob_count,
+              ROUND(100.0 * COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) / COUNT(DISTINCT organization_id), 1) AS in_bob_rate_pct
+            FROM activation_detail
+            GROUP BY region_code, plus_started_month, path_category
+            ORDER BY region_code, plus_started_month, path_category
+        `;
+        
+        // Color palette for path categories
+        const PATH_COLORS = {
+            'Trial': { bg: 'rgba(123, 44, 191, 0.8)', border: '#7b2cbf', text: '#b388ff' },
+            'Admin Channel': { bg: 'rgba(0, 245, 212, 0.8)', border: '#00f5d4', text: '#00f5d4' },
+            'Sales Assisted': { bg: 'rgba(255, 159, 28, 0.8)', border: '#ff9f1c', text: '#ff9f1c' },
+            'Unknown': { bg: 'rgba(136, 136, 136, 0.8)', border: '#888', text: '#888' }
+        };
+        
+        // Color palette for regions
+        const REGION_COLORS = {
+            'AMER': { bg: 'rgba(76, 201, 240, 0.8)', border: '#4cc9f0', text: '#4cc9f0' },
+            'EMEA': { bg: 'rgba(247, 37, 133, 0.8)', border: '#f72585', text: '#f72585' },
+            'APAC': { bg: 'rgba(6, 214, 160, 0.8)', border: '#06d6a0', text: '#06d6a0' },
+            'Unknown': { bg: 'rgba(136, 136, 136, 0.8)', border: '#888', text: '#888' }
+        };
+        
+        let volumeChart = null;
+        let matchRateChart = null;
+        let mixChart = null;
+        
+        // ===========================================
+        // Initialization
+        // ===========================================
+        
+        async function init() {
+            const authSection = document.getElementById('auth-section');
+            
+            try {
+                authSection.innerHTML = `
+                    <div class="loading-spinner"></div>
+                    <p class="loading-text">Checking permissions...</p>
+                `;
+                
+                const authResult = await quick.auth.requestScopes([
+                    "https://www.googleapis.com/auth/bigquery"
+                ]);
+                
+                if (authResult.hasRequiredScopes) {
+                    await loadData();
+                } else {
+                    authSection.innerHTML = `
+                        <p class="loading-text" style="margin-bottom: 20px;">
+                            This dashboard needs BigQuery access to display live data.
+                        </p>
+                        <button class="auth-button" onclick="requestAuth()">
+                            🔐 Grant BigQuery Access
+                        </button>
+                    `;
+                }
+            } catch (error) {
+                console.error('Init error:', error);
+                authSection.innerHTML = `
+                    <div class="error-message">
+                        <strong>Error:</strong> ${error.message}
+                    </div>
+                    <button class="auth-button" onclick="requestAuth()">
+                        🔐 Try Again
+                    </button>
+                `;
+            }
+        }
+        
+        async function requestAuth() {
+            try {
+                await quick.auth.requestScopes([
+                    "https://www.googleapis.com/auth/bigquery"
+                ]);
+                await loadData();
+            } catch (error) {
+                console.error('Auth error:', error);
+            }
+        }
+        
+        // ===========================================
+        // Data Loading
+        // ===========================================
+        
+        async function loadData() {
+            const authSection = document.getElementById('auth-section');
+            const dashboardContent = document.getElementById('dashboard-content');
+            
+            authSection.style.display = 'block';
+            dashboardContent.style.display = 'none';
+            
+            authSection.innerHTML = `
+                <div class="loading-spinner"></div>
+                <p class="loading-text">Querying BigQuery for 2025 data...</p>
+            `;
+            
+            try {
+                const result = await quick.dw.querySync(MATCH_RATE_QUERY, [], {
+                    timeoutMs: 60000,
+                    maxResults: 1000
+                });
+                
+                const chartData = result.results.map(row => ({
+                    region_code: row.region_code || 'Unknown',
+                    month: row.month,
+                    path_category: row.path_category || 'Unknown',
+                    total_activations: parseInt(row.total_activations) || 0,
+                    in_bob_count: parseInt(row.in_bob_count) || 0,
+                    in_bob_rate_pct: parseFloat(row.in_bob_rate_pct) || 0
+                }));
+                
+                authSection.style.display = 'none';
+                dashboardContent.style.display = 'block';
+                
+                renderDashboard(chartData);
+                
+                document.getElementById('lastUpdated').textContent = 
+                    `Last updated: ${new Date().toLocaleString()}`;
+                    
+            } catch (error) {
+                console.error('Query error:', error);
+                authSection.innerHTML = `
+                    <div class="error-message">
+                        <strong>Query Error:</strong> ${error.message}
+                        <br><br>
+                        <small>Make sure you have access to the required BigQuery tables.</small>
+                    </div>
+                    <button class="auth-button" onclick="loadData()">
+                        ↻ Retry
+                    </button>
+                `;
+            }
+        }
+        
+        // ===========================================
+        // Dashboard Rendering
+        // ===========================================
+        
+        function renderDashboard(chartData) {
+            const months = [...new Set(chartData.map(d => d.month))].sort();
+            const pathCategories = [...new Set(chartData.map(d => d.path_category))].sort();
+            const regions = [...new Set(chartData.map(d => d.region_code))].sort();
+            
+            // Calculate totals (deduplicated by summing unique combinations)
+            const totalActivations = chartData.reduce((sum, d) => sum + d.total_activations, 0);
+            const totalInBob = chartData.reduce((sum, d) => sum + d.in_bob_count, 0);
+            const overallBobRate = totalActivations > 0 ? ((totalInBob / totalActivations) * 100).toFixed(1) : 0;
+            
+            // Calculate totals by path category
+            const totalsByCategory = {};
+            pathCategories.forEach(cat => {
+                totalsByCategory[cat] = chartData
+                    .filter(d => d.path_category === cat)
+                    .reduce((sum, d) => sum + d.total_activations, 0);
+            });
+            
+            // Calculate totals by region
+            const totalsByRegion = {};
+            regions.forEach(region => {
+                totalsByRegion[region] = chartData
+                    .filter(d => d.region_code === region)
+                    .reduce((sum, d) => sum + d.total_activations, 0);
+            });
+            
+            // Render stats
+            renderStats(totalActivations, totalInBob, overallBobRate, totalsByCategory, totalsByRegion);
+            
+            // Generate insight
+            generateVolumeInsight(chartData, months, pathCategories, totalsByCategory, totalActivations);
+            
+            // Render charts
+            renderVolumeChart(chartData, months, pathCategories);
+            renderBobRateChart(chartData, months, pathCategories);
+            renderRegionChart(chartData, months, regions);
+            renderTable(chartData);
+        }
+        
+        function renderStats(totalActivations, totalInBob, overallBobRate, totalsByCategory, totalsByRegion) {
+            const statsGrid = document.getElementById('stats-grid');
+            
+            const pathColorClasses = {
+                'Trial': 'purple',
+                'Admin Channel': 'cyan',
+                'Sales Assisted': 'orange',
+                'Unknown': 'green'
+            };
+            
+            const regionColorClasses = {
+                'AMER': 'blue',
+                'EMEA': 'pink',
+                'APAC': 'green',
+                'Unknown': 'yellow'
+            };
+            
+            let html = `
+                <div class="stat-card">
+                    <div class="stat-label">Total Activations</div>
+                    <div class="stat-value cyan">${totalActivations.toLocaleString()}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">In BOB (Territory)</div>
+                    <div class="stat-value pink">${totalInBob.toLocaleString()}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Overall BOB Rate</div>
+                    <div class="stat-value yellow">${overallBobRate}%</div>
+                </div>
+            `;
+            
+            // Add stat for each path category
+            Object.entries(totalsByCategory).forEach(([cat, count]) => {
+                const colorClass = pathColorClasses[cat] || 'green';
+                html += `
+                    <div class="stat-card">
+                        <div class="stat-label">${cat}</div>
+                        <div class="stat-value ${colorClass}">${count.toLocaleString()}</div>
+                    </div>
+                `;
+            });
+            
+            // Add stat for each region
+            Object.entries(totalsByRegion).forEach(([region, count]) => {
+                const colorClass = regionColorClasses[region] || 'green';
+                html += `
+                    <div class="stat-card">
+                        <div class="stat-label">${region}</div>
+                        <div class="stat-value ${colorClass}">${count.toLocaleString()}</div>
+                    </div>
+                `;
+            });
+            
+            statsGrid.innerHTML = html;
+        }
+        
+        function generateVolumeInsight(chartData, months, pathCategories, totalsByCategory, totalActivations) {
+            // Find top categories
+            const sortedCats = Object.entries(totalsByCategory)
+                .sort((a, b) => b[1] - a[1]);
+            
+            const topCat = sortedCats[0];
+            const topPct = ((topCat[1] / totalActivations) * 100).toFixed(0);
+            
+            // Calculate MoM growth for each category
+            let momInsights = [];
+            if (months.length >= 2) {
+                const lastMonth = months[months.length - 1];
+                const prevMonth = months[months.length - 2];
+                
+                pathCategories.forEach(cat => {
+                    const lastData = chartData.find(d => d.month === lastMonth && d.path_category === cat);
+                    const prevData = chartData.find(d => d.month === prevMonth && d.path_category === cat);
+                    
+                    if (lastData && prevData && prevData.total_activations > 0) {
+                        const change = ((lastData.total_activations - prevData.total_activations) / prevData.total_activations * 100).toFixed(0);
+                        if (Math.abs(change) > 10) {
+                            momInsights.push({ cat, change: parseInt(change) });
+                        }
+                    }
+                });
+            }
+            
+            let insightText = `
+                <strong>${topCat[0]}</strong> represents the largest segment at <strong>${topPct}%</strong> of all 2025 activations.
+            `;
+            
+            if (momInsights.length > 0) {
+                const growing = momInsights.filter(m => m.change > 0).sort((a, b) => b.change - a.change);
+                const declining = momInsights.filter(m => m.change < 0).sort((a, b) => a.change - b.change);
+                
+                if (growing.length > 0) {
+                    insightText += ` <strong>${growing[0].cat}</strong> is growing fastest (+${growing[0].change}% MoM).`;
+                }
+                if (declining.length > 0) {
+                    insightText += ` <strong>${declining[0].cat}</strong> declined ${declining[0].change}% MoM.`;
+                }
+            }
+            
+            document.getElementById('volume-insight-text').innerHTML = insightText;
+        }
+        
+        function renderVolumeChart(chartData, months, pathCategories) {
+            const ctx = document.getElementById('volumeChart').getContext('2d');
+            
+            if (volumeChart) volumeChart.destroy();
+            
+            // Aggregate by month and path_category (sum across regions)
+            const datasets = pathCategories.map(cat => ({
+                label: cat,
+                data: months.map(m => {
+                    return chartData
+                        .filter(d => d.month === m && d.path_category === cat)
+                        .reduce((sum, d) => sum + d.total_activations, 0);
+                }),
+                backgroundColor: PATH_COLORS[cat]?.bg || 'rgba(136, 136, 136, 0.8)',
+                borderColor: PATH_COLORS[cat]?.border || '#888',
+                borderWidth: 1,
+                borderRadius: 4
+            }));
+            
+            volumeChart = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: months, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                color: '#888',
+                                font: { family: 'Space Mono', size: 11 },
+                                usePointStyle: true,
+                                padding: 16
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                            titleFont: { family: 'Syne', size: 14 },
+                            bodyFont: { family: 'Space Mono', size: 12 },
+                            padding: 16,
+                            cornerRadius: 8
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#666', font: { family: 'Space Mono', size: 11 } }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#666', font: { family: 'Space Mono', size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderBobRateChart(chartData, months, pathCategories) {
+            const ctx = document.getElementById('matchRateChart').getContext('2d');
+            
+            if (matchRateChart) matchRateChart.destroy();
+            
+            // Calculate BOB rate by path category (aggregated across regions)
+            const datasets = pathCategories.map(cat => {
+                const data = months.map(m => {
+                    const rows = chartData.filter(d => d.month === m && d.path_category === cat);
+                    const total = rows.reduce((sum, d) => sum + d.total_activations, 0);
+                    const inBob = rows.reduce((sum, d) => sum + d.in_bob_count, 0);
+                    return total > 0 ? (100.0 * inBob / total).toFixed(1) : null;
+                });
+                return {
+                    label: cat,
+                    data: data,
+                    borderColor: PATH_COLORS[cat]?.border || '#888',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: PATH_COLORS[cat]?.border || '#888',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    spanGaps: true
+                };
+            });
+            
+            matchRateChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: months, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                color: '#888',
+                                font: { family: 'Space Mono', size: 10 },
+                                usePointStyle: true,
+                                padding: 12,
+                                boxWidth: 8
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y || 'N/A') + '%'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#666', font: { family: 'Space Mono', size: 10 } }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: {
+                                color: '#666',
+                                font: { family: 'Space Mono', size: 10 },
+                                callback: v => v + '%'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderRegionChart(chartData, months, regions) {
+            const ctx = document.getElementById('mixChart').getContext('2d');
+            
+            if (mixChart) mixChart.destroy();
+            
+            // Calculate monthly totals first
+            const monthlyTotals = {};
+            months.forEach(m => {
+                monthlyTotals[m] = chartData
+                    .filter(d => d.month === m)
+                    .reduce((sum, d) => sum + d.total_activations, 0);
+            });
+            
+            const datasets = regions.map(region => ({
+                label: region,
+                data: months.map(m => {
+                    const regionTotal = chartData
+                        .filter(d => d.month === m && d.region_code === region)
+                        .reduce((sum, d) => sum + d.total_activations, 0);
+                    const total = monthlyTotals[m];
+                    return total > 0 ? ((regionTotal / total) * 100).toFixed(1) : 0;
+                }),
+                backgroundColor: REGION_COLORS[region]?.bg || 'rgba(136, 136, 136, 0.8)',
+                borderColor: REGION_COLORS[region]?.border || '#888',
+                borderWidth: 0
+            }));
+            
+            mixChart = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: months, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                color: '#888',
+                                font: { family: 'Space Mono', size: 10 },
+                                usePointStyle: true,
+                                padding: 12,
+                                boxWidth: 8
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y + '%'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#666', font: { family: 'Space Mono', size: 10 } }
+                        },
+                        y: {
+                            stacked: true,
+                            max: 100,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: {
+                                color: '#666',
+                                font: { family: 'Space Mono', size: 10 },
+                                callback: v => v + '%'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function getBadgeClass(pathCategory) {
+            const classes = {
+                'Trial': 'trial',
+                'Admin Channel': 'skip-trial',
+                'Sales Assisted': 'sales-assisted',
+                'Unknown': 'other'
+            };
+            return classes[pathCategory] || 'other';
+        }
+        
+        function getRegionBadgeClass(region) {
+            const classes = {
+                'AMER': 'skip-trial',
+                'EMEA': 'trial',
+                'APAC': 'sales-assisted',
+                'Unknown': 'other'
+            };
+            return classes[region] || 'other';
+        }
+        
+        function renderTable(chartData) {
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = '';
+            
+            const sortedData = [...chartData].sort((a, b) => 
+                b.month.localeCompare(a.month) || 
+                a.region_code.localeCompare(b.region_code) ||
+                a.path_category.localeCompare(b.path_category)
+            );
+            
+            sortedData.forEach(row => {
+                const tr = document.createElement('tr');
+                const pathBadgeClass = getBadgeClass(row.path_category);
+                const regionBadgeClass = getRegionBadgeClass(row.region_code);
+                tr.innerHTML = `
+                    <td>${row.month}</td>
+                    <td><span class="badge ${regionBadgeClass}">${row.region_code}</span></td>
+                    <td><span class="badge ${pathBadgeClass}">${row.path_category}</span></td>
+                    <td>${row.total_activations.toLocaleString()}</td>
+                    <td>${row.in_bob_count.toLocaleString()}</td>
+                    <td>
+                        ${row.in_bob_rate_pct}%
+                        <div class="match-rate-bar">
+                            <div class="match-rate-fill" style="width: ${row.in_bob_rate_pct}%"></div>
+                        </div>
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+        
+        // Start initialization
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
