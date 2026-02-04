@@ -38,6 +38,7 @@ This dashboard answers key questions about Plus activations:
 | `sdp-stg-commercial.lucasmiller_scratch.account_territory_daily_snapshot` | Territory snapshots for BOB attribution |
 | `shopify-dw.accounts_and_administration.business_platform_contracts` | Contract data |
 | `shopify-dw.sales.sales_reporting_regions` | Regional mapping (country_code → region) |
+| `shopify-dw.sales.sales_leads` | Plus leads data for self-serve routing analysis |
 
 ## 🚀 Deployment
 
@@ -61,6 +62,7 @@ Simply open `index.html` in a browser. Note: BigQuery integration requires Quick
 1. **📊 Activation Volume by Path** - Stacked bar chart showing monthly activations by path category
 2. **📈 BOB Rate by Path** - Line chart showing % in territory at activation time
 3. **🌍 Regional Mix** - 100% stacked bar showing AMER/EMEA/APAC distribution
+4. **🎯 Plus Leads Self-Serve Rate** - Line chart showing % of new Plus leads routed as 'self-serve' by region
 
 ### Stat Cards
 
