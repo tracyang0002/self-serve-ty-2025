@@ -991,6 +991,35 @@
                 };
             });
             
+            // Add Self-serve Total line (combines Self-serve Trial + Self-serve Admin)
+            const selfServeCategories = ['Self-serve Trial', 'Self-serve Admin'];
+            const hasSelfServe = selfServeCategories.some(cat => pathCategories.includes(cat));
+            
+            if (hasSelfServe) {
+                const selfServeTotalData = months.map(m => {
+                    const rows = chartData.filter(d => d.month === m && selfServeCategories.includes(d.path_category));
+                    const total = rows.reduce((sum, d) => sum + d.total_activations, 0);
+                    const inBob = rows.reduce((sum, d) => sum + d.in_bob_count, 0);
+                    return total > 0 ? (100.0 * inBob / total).toFixed(1) : null;
+                });
+                
+                datasets.push({
+                    label: 'Self-serve Total',
+                    data: selfServeTotalData,
+                    borderColor: '#ffd60a',
+                    backgroundColor: 'transparent',
+                    borderWidth: 3,
+                    borderDash: [5, 5],
+                    tension: 0.4,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    pointBackgroundColor: '#ffd60a',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    spanGaps: true
+                });
+            }
+            
             matchRateChart = new Chart(ctx, {
                 type: 'line',
                 data: { labels: months, datasets },
