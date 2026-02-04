@@ -366,8 +366,15 @@
         
         <!-- Dashboard Content (hidden until data loads) -->
         <div id="dashboard-content">
-            <div class="stats-grid" id="stats-grid">
-                <!-- Stats will be dynamically generated -->
+            <!-- Region Filter -->
+            <div class="filter-section" style="margin-bottom: 30px;">
+                <label style="font-family: 'Space Mono', monospace; font-size: 0.8rem; color: #888; margin-right: 12px;">FILTER BY REGION:</label>
+                <select id="regionFilter" onchange="applyRegionFilter()" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 16px; border-radius: 6px; font-family: 'Space Mono', monospace; font-size: 0.85rem; cursor: pointer;">
+                    <option value="ALL">All Regions</option>
+                    <option value="AMER">AMER</option>
+                    <option value="EMEA">EMEA</option>
+                    <option value="APAC">APAC</option>
+                </select>
             </div>
             
             <!-- Volume Chart -->
@@ -406,7 +413,7 @@
                 <div class="chart-header">
                     <div>
                         <h2 class="chart-title">🎯 Plus Leads Self-Serve Rate by Region</h2>
-                        <p class="chart-subtitle">% of new Plus leads with routing_segment = 'self-serve'</p>
+                        <p class="chart-subtitle">Daily % of new Plus leads with routing_segment = 'self-serve' (Jan 2026+)</p>
                     </div>
                 </div>
                 <div class="chart-container">
@@ -545,17 +552,17 @@
             ORDER BY region, plus_started_month, path_category
         `;
         
-        // Query for leads self-serve rate by region
+        // Query for leads self-serve rate by region (daily from 2026)
         const LEADS_QUERY = `
             SELECT 
-              FORMAT_DATE('%Y-%m', created_at) AS created_mth,
+              FORMAT_DATE('%Y-%m-%d', created_at) AS created_date,
               CASE WHEN reporting_region IN ('AMER', 'LATAM') OR reporting_region IS NULL THEN 'AMER' ELSE reporting_region END AS region,
               routing_segment,
               COUNT(lead_id) AS lead_cnt
             FROM \`shopify-dw.sales.sales_leads\`
             WHERE primary_product_interest_at_lead_creation = 'Plus'
               AND NOT is_shopify_customer
-              AND created_at >= '2025-01-01'
+              AND created_at >= '2026-01-01'
             GROUP BY 1, 2, 3
             ORDER BY 1, 2, 3
         `;
@@ -579,6 +586,10 @@
         let volumeChart = null;
         let matchRateChart = null;
         let leadsChart = null;
+        
+        // Global data storage for filtering
+        let globalChartData = null;
+        let globalLeadsData = null;
         
         // ===========================================
         // Initialization
@@ -666,7 +677,7 @@
                 }));
                 
                 const leadsData = leadsResult.results.map(row => ({
-                    month: row.created_mth,
+                    date: row.created_date,
                     region: row.region || 'Unknown',
                     routing_segment: row.routing_segment || 'Unknown',
                     lead_cnt: parseInt(row.lead_cnt) || 0
@@ -699,43 +710,41 @@
         // Dashboard Rendering
         // ===========================================
         
-        function renderDashboard(chartData, leadsData) {
-            const months = [...new Set(chartData.map(d => d.month))].sort();
-            const pathCategories = [...new Set(chartData.map(d => d.path_category))].sort();
-            const regions = [...new Set(chartData.map(d => d.region))].sort();
+        function renderDashboard(chartData, leadsData, selectedRegion = 'ALL') {
+            // Store globally for filtering
+            globalChartData = chartData;
+            globalLeadsData = leadsData;
             
-            // Calculate totals (deduplicated by summing unique combinations)
-            const totalActivations = chartData.reduce((sum, d) => sum + d.total_activations, 0);
-            const totalInBob = chartData.reduce((sum, d) => sum + d.in_bob_count, 0);
-            const overallBobRate = totalActivations > 0 ? ((totalInBob / totalActivations) * 100).toFixed(1) : 0;
+            // Filter data by region
+            const filteredChartData = selectedRegion === 'ALL' 
+                ? chartData 
+                : chartData.filter(d => d.region === selectedRegion);
             
-            // Calculate totals by path category
+            const months = [...new Set(filteredChartData.map(d => d.month))].sort();
+            const pathCategories = [...new Set(filteredChartData.map(d => d.path_category))].sort();
+            
+            // Generate insight
             const totalsByCategory = {};
             pathCategories.forEach(cat => {
-                totalsByCategory[cat] = chartData
+                totalsByCategory[cat] = filteredChartData
                     .filter(d => d.path_category === cat)
                     .reduce((sum, d) => sum + d.total_activations, 0);
             });
-            
-            // Calculate totals by region
-            const totalsByRegion = {};
-            regions.forEach(region => {
-                totalsByRegion[region] = chartData
-                    .filter(d => d.region === region)
-                    .reduce((sum, d) => sum + d.total_activations, 0);
-            });
-            
-            // Render stats
-            renderStats(totalActivations, totalInBob, overallBobRate, totalsByCategory, totalsByRegion);
-            
-            // Generate insight
-            generateVolumeInsight(chartData, months, pathCategories, totalsByCategory, totalActivations);
+            const totalActivations = filteredChartData.reduce((sum, d) => sum + d.total_activations, 0);
+            generateVolumeInsight(filteredChartData, months, pathCategories, totalsByCategory, totalActivations);
             
             // Render charts
-            renderVolumeChart(chartData, months, pathCategories);
-            renderBobRateChart(chartData, months, pathCategories);
-            renderLeadsChart(leadsData);
-            renderTable(chartData);
+            renderVolumeChart(filteredChartData, months, pathCategories);
+            renderBobRateChart(filteredChartData, months, pathCategories);
+            renderLeadsChart(leadsData, selectedRegion);
+            renderTable(filteredChartData);
+        }
+        
+        function applyRegionFilter() {
+            const selectedRegion = document.getElementById('regionFilter').value;
+            if (globalChartData && globalLeadsData) {
+                renderDashboard(globalChartData, globalLeadsData, selectedRegion);
+            }
         }
         
         function renderStats(totalActivations, totalInBob, overallBobRate, totalsByCategory, totalsByRegion) {
@@ -974,23 +983,28 @@
             });
         }
         
-        function renderLeadsChart(leadsData) {
+        function renderLeadsChart(leadsData, selectedRegion = 'ALL') {
             const ctx = document.getElementById('leadsChart').getContext('2d');
             
             if (leadsChart) leadsChart.destroy();
             
-            // Get unique months and regions
-            const months = [...new Set(leadsData.map(d => d.month))].sort();
-            const regions = [...new Set(leadsData.map(d => d.region))].sort();
+            // Filter by region if selected
+            const filteredData = selectedRegion === 'ALL' ? leadsData : leadsData.filter(d => d.region === selectedRegion);
             
-            // Calculate self-serve rate for each region and month
+            // Get unique dates and regions
+            const dates = [...new Set(filteredData.map(d => d.date))].sort();
+            const regions = selectedRegion === 'ALL' 
+                ? [...new Set(filteredData.map(d => d.region))].sort()
+                : [selectedRegion];
+            
+            // Calculate self-serve rate for each region and date
             const datasets = regions.map(region => {
-                const data = months.map(m => {
-                    const regionMonthData = leadsData.filter(d => d.month === m && d.region === region);
-                    const totalLeads = regionMonthData.reduce((sum, d) => sum + d.lead_cnt, 0);
-                    const selfServeLeads = regionMonthData
-                        .filter(d => d.routing_segment && d.routing_segment.toLowerCase() === 'self-serve')
-                        .reduce((sum, d) => sum + d.lead_cnt, 0);
+                const data = dates.map(d => {
+                    const regionDateData = filteredData.filter(row => row.date === d && row.region === region);
+                    const totalLeads = regionDateData.reduce((sum, row) => sum + row.lead_cnt, 0);
+                    const selfServeLeads = regionDateData
+                        .filter(row => row.routing_segment && row.routing_segment.toLowerCase() === 'self-serve')
+                        .reduce((sum, row) => sum + row.lead_cnt, 0);
                     return totalLeads > 0 ? (100.0 * selfServeLeads / totalLeads).toFixed(1) : null;
                 });
                 return {
@@ -998,12 +1012,12 @@
                     data: data,
                     borderColor: REGION_COLORS[region]?.border || '#888',
                     backgroundColor: REGION_COLORS[region]?.bg || 'rgba(136, 136, 136, 0.3)',
-                    tension: 0.4,
-                    pointRadius: 5,
-                    pointHoverRadius: 7,
+                    tension: 0.3,
+                    pointRadius: 2,
+                    pointHoverRadius: 5,
                     pointBackgroundColor: REGION_COLORS[region]?.border || '#888',
                     pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
+                    pointBorderWidth: 1,
                     fill: false,
                     spanGaps: true
                 };
@@ -1011,7 +1025,7 @@
             
             leadsChart = new Chart(ctx, {
                 type: 'line',
-                data: { labels: months, datasets },
+                data: { labels: dates, datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -1052,10 +1066,10 @@
             });
             
             // Generate leads insight
-            generateLeadsInsight(leadsData, months, regions);
+            generateLeadsInsight(filteredData, dates, regions);
         }
         
-        function generateLeadsInsight(leadsData, months, regions) {
+        function generateLeadsInsight(leadsData, dates, regions) {
             // Calculate overall self-serve rate
             const totalLeads = leadsData.reduce((sum, d) => sum + d.lead_cnt, 0);
             const selfServeLeads = leadsData
