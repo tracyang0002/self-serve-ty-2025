@@ -466,6 +466,19 @@
                 </div>
             </div>
             
+            <!-- Average GMV Chart -->
+            <div class="chart-section">
+                <div class="chart-header">
+                    <div>
+                    <h2 class="chart-title">💰 Average GMV by Path</h2>
+                    <p class="chart-subtitle">Avg L365d GMV (USD) at Plus activation</p>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="gmvChart"></canvas>
+                </div>
+            </div>
+            
             <!-- Leads Self-Serve Rate Chart -->
             <div class="chart-section">
                 <div class="chart-header">
@@ -587,7 +600,8 @@
               path_category,
               COUNT(DISTINCT organization_id) AS total_activations,
               COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) AS in_bob_count,
-              ROUND(100.0 * COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) / COUNT(DISTINCT organization_id), 1) AS in_bob_rate_pct
+              ROUND(100.0 * COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) / COUNT(DISTINCT organization_id), 1) AS in_bob_rate_pct,
+              ROUND(AVG(primary_shop_plus_started_on_gmv_usd_l365d), 0) AS avg_gmv
             FROM activation_detail
             GROUP BY region, plus_started_month, path_category
             ORDER BY region, plus_started_month, path_category
@@ -626,6 +640,7 @@
         
         let volumeChart = null;
         let matchRateChart = null;
+        let gmvChart = null;
         let leadsChart = null;
         
         // Global data storage for filtering
@@ -714,7 +729,8 @@
                     path_category: row.path_category || 'Unknown',
                     total_activations: parseInt(row.total_activations) || 0,
                     in_bob_count: parseInt(row.in_bob_count) || 0,
-                    in_bob_rate_pct: parseFloat(row.in_bob_rate_pct) || 0
+                    in_bob_rate_pct: parseFloat(row.in_bob_rate_pct) || 0,
+                    avg_gmv: parseFloat(row.avg_gmv) || 0
                 }));
                 
                 const leadsData = leadsResult.results.map(row => ({
@@ -787,6 +803,7 @@
             // Render charts
             renderVolumeChart(filteredChartData, months, pathCategories);
             renderBobRateChart(filteredChartData, months, pathCategories);
+            renderGmvChart(filteredChartData, months, pathCategories);
             renderLeadsChart(leadsData, selectedRegions);
         }
         
@@ -1057,6 +1074,78 @@
                                 color: '#666',
                                 font: { family: 'Space Mono', size: 10 },
                                 callback: v => v + '%'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderGmvChart(chartData, months, pathCategories) {
+            const ctx = document.getElementById('gmvChart').getContext('2d');
+            
+            if (gmvChart) gmvChart.destroy();
+            
+            // Calculate weighted average GMV by path category
+            const datasets = pathCategories.map(cat => {
+                const data = months.map(m => {
+                    const rows = chartData.filter(d => d.month === m && d.path_category === cat);
+                    // Weighted average by activations
+                    const totalActivations = rows.reduce((sum, d) => sum + d.total_activations, 0);
+                    const weightedGmv = rows.reduce((sum, d) => sum + (d.avg_gmv * d.total_activations), 0);
+                    return totalActivations > 0 ? Math.round(weightedGmv / totalActivations) : null;
+                });
+                return {
+                    label: cat,
+                    data: data,
+                    borderColor: PATH_COLORS[cat]?.border || '#888',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: PATH_COLORS[cat]?.border || '#888',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    spanGaps: true
+                };
+            });
+            
+            gmvChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: months, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                color: '#888',
+                                font: { family: 'Space Mono', size: 10 },
+                                usePointStyle: true,
+                                padding: 12,
+                                boxWidth: 8
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ctx.dataset.label + ': $' + (ctx.parsed.y?.toLocaleString() || 'N/A')
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#666', font: { family: 'Space Mono', size: 10 } }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: {
+                                color: '#666',
+                                font: { family: 'Space Mono', size: 10 },
+                                callback: v => '$' + v.toLocaleString()
                             }
                         }
                     }
