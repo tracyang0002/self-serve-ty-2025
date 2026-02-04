@@ -517,7 +517,7 @@
                 br.primary_shop_country,
                 br.territory_name,
                 br.account_id,
-                srr.region,
+                CASE WHEN srr.region IN ('AMER', 'LATAM') THEN 'AMER' ELSE srr.region END AS region,
                 CASE 
                   WHEN br.territory_name IS NULL OR br.territory_name = 'No Territory' THEN 0 
                   ELSE 1 
