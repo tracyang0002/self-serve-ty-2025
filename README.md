@@ -138,7 +138,7 @@ activation_detail AS (
     br.path_category,
     CASE 
       WHEN bpc.commercial_region_code IN ('EMEA', 'APAC') THEN bpc.commercial_region_code
-      WHEN bpc.commercial_region_code IN ('Canada', 'US East', 'US West', 'LATAM') THEN 'AMER'
+      WHEN bpc.commercial_region_code IN ('Canada', 'US East', 'US West', 'LATAM', 'US') THEN 'AMER'
       ELSE 'Unknown'
     END AS region_code,
     CASE 
