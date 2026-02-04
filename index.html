@@ -1037,14 +1037,14 @@
                     label: region,
                     data: data,
                     borderColor: REGION_COLORS[region]?.border || '#888',
-                    backgroundColor: REGION_COLORS[region]?.bg || 'rgba(136, 136, 136, 0.3)',
+                    backgroundColor: 'transparent',
                     tension: 0.3,
-                    pointRadius: 2,
-                    pointHoverRadius: 5,
+                    pointRadius: 3,
+                    pointHoverRadius: 6,
                     pointBackgroundColor: REGION_COLORS[region]?.border || '#888',
                     pointBorderColor: '#fff',
-                    pointBorderWidth: 1,
-                    fill: true,
+                    pointBorderWidth: 2,
+                    fill: false,
                     spanGaps: true
                 };
             });
