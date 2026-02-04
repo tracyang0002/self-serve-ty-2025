@@ -471,9 +471,9 @@
               SELECT 
                 a.*,
                 CASE 
-                  WHEN a.plus_trial_started_on IS NOT NULL THEN 'Trial'
-                  WHEN b.shop_id IS NOT NULL THEN 'Admin Channel'
-                  ELSE 'Sales Assisted'
+                  WHEN a.plus_trial_started_on IS NOT NULL THEN 'Self-serve Trial'
+                  WHEN b.shop_id IS NOT NULL THEN 'Self-serve Admin'
+                  ELSE 'Non Self-Serve'
                 END AS path_category
               FROM plus_base a
               LEFT JOIN skip_trial_shops b ON a.primary_shop_id = b.shop_id
@@ -517,7 +517,7 @@
                 br.primary_shop_country,
                 br.territory_name,
                 br.account_id,
-                CASE WHEN srr.region IN ('AMER', 'LATAM') THEN 'AMER' ELSE srr.region END AS region,
+                CASE WHEN srr.region IN ('AMER', 'LATAM') OR srr.region IS NULL THEN 'AMER' ELSE srr.region END AS region,
                 CASE 
                   WHEN br.territory_name IS NULL OR br.territory_name = 'No Territory' THEN 0 
                   ELSE 1 
@@ -544,9 +544,9 @@
         
         // Color palette for path categories
         const PATH_COLORS = {
-            'Trial': { bg: 'rgba(123, 44, 191, 0.8)', border: '#7b2cbf', text: '#b388ff' },
-            'Admin Channel': { bg: 'rgba(0, 245, 212, 0.8)', border: '#00f5d4', text: '#00f5d4' },
-            'Sales Assisted': { bg: 'rgba(255, 159, 28, 0.8)', border: '#ff9f1c', text: '#ff9f1c' },
+            'Self-serve Trial': { bg: 'rgba(123, 44, 191, 0.8)', border: '#7b2cbf', text: '#b388ff' },
+            'Self-serve Admin': { bg: 'rgba(0, 245, 212, 0.8)', border: '#00f5d4', text: '#00f5d4' },
+            'Non Self-Serve': { bg: 'rgba(255, 159, 28, 0.8)', border: '#ff9f1c', text: '#ff9f1c' },
             'Unknown': { bg: 'rgba(136, 136, 136, 0.8)', border: '#888', text: '#888' }
         };
         
@@ -716,9 +716,9 @@
             const statsGrid = document.getElementById('stats-grid');
             
             const pathColorClasses = {
-                'Trial': 'purple',
-                'Admin Channel': 'cyan',
-                'Sales Assisted': 'orange',
+                'Self-serve Trial': 'purple',
+                'Self-serve Admin': 'cyan',
+                'Non Self-Serve': 'orange',
                 'Unknown': 'green'
             };
             
@@ -1021,9 +1021,9 @@
         
         function getBadgeClass(pathCategory) {
             const classes = {
-                'Trial': 'trial',
-                'Admin Channel': 'skip-trial',
-                'Sales Assisted': 'sales-assisted',
+                'Self-serve Trial': 'trial',
+                'Self-serve Admin': 'skip-trial',
+                'Non Self-Serve': 'sales-assisted',
                 'Unknown': 'other'
             };
             return classes[pathCategory] || 'other';

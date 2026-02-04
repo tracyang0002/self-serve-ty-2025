@@ -10,9 +10,9 @@ A real-time dashboard for analyzing Shopify Plus activations and their Book of B
 This dashboard answers key questions about Plus activations:
 
 1. **How did merchants get to Plus?** (Path Category)
-   - **Trial** - Started a Plus trial before activating
-   - **Admin Channel** - Self-serve upgrade via admin (no trial)
-   - **Sales Assisted** - Not trial, not in admin funnel → sales involvement
+   - **Self-serve Trial** - Started a Plus trial before activating
+   - **Self-serve Admin** - Self-serve upgrade via admin (no trial)
+   - **Non Self-Serve** - Not trial, not in admin funnel → sales involvement
 
 2. **Was sales already working this merchant?** (BOB Attribution)
    - Checks if the org was in a sales territory *before* they activated Plus
@@ -108,9 +108,9 @@ plus_cohort AS (
   SELECT 
     a.*,
     CASE 
-      WHEN a.plus_trial_started_on IS NOT NULL THEN 'Trial'
-      WHEN b.shop_id IS NOT NULL THEN 'Admin Channel'
-      ELSE 'Sales Assisted'
+      WHEN a.plus_trial_started_on IS NOT NULL THEN 'Self-serve Trial'
+      WHEN b.shop_id IS NOT NULL THEN 'Self-serve Admin'
+      ELSE 'Non Self-Serve'
     END AS path_category
   FROM plus_base a
   LEFT JOIN skip_trial_shops b ON a.primary_shop_id = b.shop_id
@@ -154,7 +154,7 @@ activation_detail AS (
     br.primary_shop_country,
     br.territory_name,
     br.account_id,
-    CASE WHEN srr.region IN ('AMER', 'LATAM') THEN 'AMER' ELSE srr.region END AS region,
+    CASE WHEN srr.region IN ('AMER', 'LATAM') OR srr.region IS NULL THEN 'AMER' ELSE srr.region END AS region,
     CASE 
       WHEN br.territory_name IS NULL OR br.territory_name = 'No Territory' THEN 0 
       ELSE 1 
