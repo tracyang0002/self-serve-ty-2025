@@ -512,6 +512,7 @@
             WITH plus_base AS (
               SELECT
                 a.organization_id,
+                a.original_billing_deal_id,
                 a.primary_shop_id,
                 a.plus_started_on,
                 a.plus_trial_started_on,
@@ -552,9 +553,11 @@
                 pc.primary_shop_country,
                 pc.activation_type,
                 pc.primary_shop_plus_started_on_gmv_usd_l365d,
+                gmv.estimated_annualized_gmv,
                 pc.contract_type,
                 pc.path_category,
                 bob.territory_name,
+                IF(bob.territory_name IS NOT NULL, IF(REGEXP_CONTAINS(bob.territory_name, r'_A_'), 'Aquisition','Cross Sell'), 'Not assigned') AS territory_sales_motion,
                 bob.account_id,
                 bob.date,
                 ROW_NUMBER() OVER (
@@ -565,6 +568,8 @@
               LEFT JOIN \`sdp-stg-commercial.lucasmiller_scratch.account_territory_daily_snapshot\` bob
                 ON CAST(pc.organization_id AS STRING) = bob.organization_id
                 AND bob.date < pc.plus_started_on
+              LEFT JOIN \`sdp-prd-commercial.intermediate.plus_deal_daily_annualized_gmv\` gmv
+                ON pc.original_billing_deal_id = gmv.original_billing_deal_id AND DATE(gmv.reported_date) = pc.plus_started_on
             ),
 
             activation_detail AS (
@@ -575,23 +580,33 @@
                 br.plus_trial_started_on,
                 FORMAT_DATE('%Y-%m', br.plus_started_on) AS plus_started_month,
                 br.primary_shop_plus_started_on_gmv_usd_l365d,
+                br.estimated_annualized_gmv,
                 br.activation_type,
                 br.contract_type,
                 br.path_category,
                 br.primary_shop_country,
                 br.territory_name,
+                br.territory_sales_motion,
                 br.account_id,
                 CASE WHEN srr.region IN ('AMER', 'LATAM') OR srr.region IS NULL THEN 'AMER' ELSE srr.region END AS region,
                 CASE 
                   WHEN br.territory_name IS NULL OR br.territory_name = 'No Territory' THEN 0 
                   ELSE 1 
-                END AS in_bob
+                END AS in_bob,
+                ARRAY_AGG(opps.created_at IGNORE NULLS ORDER BY opps.created_at DESC) AS opp_created_at_list,
+                LOGICAL_OR(opps.opportunity_id IS NOT NULL) AS has_opp,
+                LOGICAL_OR(opps.opportunity_id IS NOT NULL AND opps.is_closed AND opps.is_won) AS has_cw_opp,
+                LOGICAL_OR(opps.opportunity_id IS NOT NULL AND opps.is_closed AND NOT opps.is_won) AS has_cl_opp
               FROM bob_ranked br
               LEFT JOIN \`shopify-dw.accounts_and_administration.business_platform_contracts\` bpc
                 ON br.organization_id = bpc.organization_id
               LEFT JOIN \`shopify-dw.sales.sales_reporting_regions\` srr
                 ON br.primary_shop_country = srr.country_code
+              LEFT JOIN \`shopify-dw.sales.sales_opportunities\` opps
+                ON opps.salesforce_account_id = br.account_id
+                AND (SELECT LOGICAL_OR(product = 'Plus') FROM UNNEST(product_list) AS product)
               WHERE br.rn = 1 OR br.rn IS NULL
+              GROUP BY ALL
             )
 
             SELECT
