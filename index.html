@@ -476,15 +476,15 @@
                 </div>
             </div>
             
-            <!-- Average GMV Chart -->
+            <!-- GMV Band Mix Chart -->
             <div class="chart-section">
                 <div class="chart-header">
                     <div>
-                    <h2 class="chart-title">💰 Median GMV by Path</h2>
-                    <p class="chart-subtitle">Median Estimated Annualized GMV (USD) at Plus activation</p>
+                    <h2 class="chart-title">💰 Activations by GMV Band</h2>
+                    <p class="chart-subtitle">Monthly activation volume by Estimated Annualized GMV band</p>
                     </div>
                 </div>
-                <div class="chart-container">
+                <div class="chart-container chart-container-tall">
                     <canvas id="gmvChart"></canvas>
                 </div>
             </div>
@@ -1082,32 +1082,37 @@
             
             if (gmvChart) gmvChart.destroy();
             
-            // Calculate weighted median GMV by path category
-            const datasets = pathCategories.map(cat => {
-                const data = months.map(m => {
-                    const rows = chartData.filter(d => d.month === m && d.path_category === cat);
-                    // Weighted median by activations
-                    const totalActivations = rows.reduce((sum, d) => sum + d.total_activations, 0);
-                    const weightedGmv = rows.reduce((sum, d) => sum + (d.median_gmv * d.total_activations), 0);
-                    return totalActivations > 0 ? Math.round(weightedGmv / totalActivations) : null;
-                });
-                return {
-                    label: cat,
-                    data: data,
-                    borderColor: PATH_COLORS[cat]?.border || '#888',
-                    backgroundColor: 'transparent',
-                    tension: 0.4,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    pointBackgroundColor: PATH_COLORS[cat]?.border || '#888',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    spanGaps: true
-                };
-            });
+            // GMV band colors
+            const GMV_BAND_COLORS = {
+                '<1M': { bg: 'rgba(6, 214, 160, 0.8)', border: '#06d6a0' },
+                '1M-5M': { bg: 'rgba(76, 201, 240, 0.8)', border: '#4cc9f0' },
+                '5M-10M': { bg: 'rgba(123, 44, 191, 0.8)', border: '#7b2cbf' },
+                '10M+': { bg: 'rgba(247, 37, 133, 0.8)', border: '#f72585' },
+                'N/A': { bg: 'rgba(136, 136, 136, 0.8)', border: '#888' }
+            };
+            
+            // Get GMV bands present in filtered data
+            const gmvBandOrder = ['<1M', '1M-5M', '5M-10M', '10M+', 'N/A'];
+            const gmvBands = gmvBandOrder.filter(band => 
+                chartData.some(d => d.gmv_band === band)
+            );
+            
+            // Aggregate by month and gmv_band (sum across path categories and regions)
+            const datasets = gmvBands.map(band => ({
+                label: band,
+                data: months.map(m => {
+                    return chartData
+                        .filter(d => d.month === m && d.gmv_band === band)
+                        .reduce((sum, d) => sum + d.total_activations, 0);
+                }),
+                backgroundColor: GMV_BAND_COLORS[band]?.bg || 'rgba(136, 136, 136, 0.8)',
+                borderColor: GMV_BAND_COLORS[band]?.border || '#888',
+                borderWidth: 1,
+                borderRadius: 4
+            }));
             
             gmvChart = new Chart(ctx, {
-                type: 'line',
+                type: 'bar',
                 data: { labels: months, datasets },
                 options: {
                     responsive: true,
@@ -1118,31 +1123,30 @@
                             position: 'top',
                             labels: {
                                 color: '#888',
-                                font: { family: 'Space Mono', size: 10 },
+                                font: { family: 'Space Mono', size: 11 },
                                 usePointStyle: true,
-                                padding: 12,
-                                boxWidth: 8
+                                padding: 16
                             }
                         },
                         tooltip: {
-                            callbacks: {
-                                label: ctx => ctx.dataset.label + ': $' + (ctx.parsed.y?.toLocaleString() || 'N/A')
-                            }
+                            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                            titleFont: { family: 'Syne', size: 14 },
+                            bodyFont: { family: 'Space Mono', size: 12 },
+                            padding: 16,
+                            cornerRadius: 8
                         }
                     },
                     scales: {
                         x: {
+                            stacked: true,
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#666', font: { family: 'Space Mono', size: 10 } }
+                            ticks: { color: '#666', font: { family: 'Space Mono', size: 11 } }
                         },
                         y: {
+                            stacked: true,
                             beginAtZero: true,
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: {
-                                color: '#666',
-                                font: { family: 'Space Mono', size: 10 },
-                                callback: v => '$' + v.toLocaleString()
-                            }
+                            ticks: { color: '#666', font: { family: 'Space Mono', size: 11 } }
                         }
                     }
                 }
