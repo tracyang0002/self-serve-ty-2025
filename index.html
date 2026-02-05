@@ -443,6 +443,14 @@
                         <label class="filter-checkbox"><input type="checkbox" value="N/A" checked onchange="applyFilters()"> N/A</label>
                     </div>
                 </div>
+                <div>
+                    <label style="font-family: 'Space Mono', monospace; font-size: 0.75rem; color: #888; display: block; margin-bottom: 8px;">OPP STATUS (multi-select)</label>
+                    <div id="oppStatusFilter" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <label class="filter-checkbox"><input type="checkbox" value="Has CW Opp" checked onchange="applyFilters()"> Has CW Opp</label>
+                        <label class="filter-checkbox"><input type="checkbox" value="Has Opp" checked onchange="applyFilters()"> Has Opp</label>
+                        <label class="filter-checkbox"><input type="checkbox" value="No Opp" checked onchange="applyFilters()"> No Opp</label>
+                    </div>
+                </div>
             </div>
             
             <!-- Volume Chart -->
@@ -473,6 +481,19 @@
                 </div>
                 <div class="chart-container">
                     <canvas id="matchRateChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Opps Rate Chart -->
+            <div class="chart-section">
+                <div class="chart-header">
+                    <div>
+                    <h2 class="chart-title">🎯 Opportunity Rate</h2>
+                    <p class="chart-subtitle">% of activations with Plus opportunities</p>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="oppsRateChart"></canvas>
                 </div>
             </div>
             
@@ -616,13 +637,21 @@
               plus_started_month AS month,
               path_category,
               gmv_band,
+              CASE 
+                WHEN has_cw_opp THEN 'Has CW Opp'
+                WHEN has_opp THEN 'Has Opp'
+                ELSE 'No Opp'
+              END AS opp_status,
               COUNT(DISTINCT organization_id) AS total_activations,
               COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) AS in_bob_count,
               ROUND(100.0 * COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) / COUNT(DISTINCT organization_id), 1) AS in_bob_rate_pct,
-              ROUND(APPROX_QUANTILES(estimated_annualized_gmv, 2)[OFFSET(1)], 0) AS median_gmv
+              ROUND(APPROX_QUANTILES(estimated_annualized_gmv, 2)[OFFSET(1)], 0) AS median_gmv,
+              COUNT(DISTINCT CASE WHEN has_opp THEN organization_id END) AS has_opp_count,
+              COUNT(DISTINCT CASE WHEN has_cw_opp THEN organization_id END) AS has_cw_opp_count,
+              COUNT(DISTINCT CASE WHEN has_cl_opp THEN organization_id END) AS has_cl_opp_count
             FROM activation_detail
-            GROUP BY region, plus_started_month, path_category, gmv_band
-            ORDER BY region, plus_started_month, path_category, gmv_band
+            GROUP BY region, plus_started_month, path_category, gmv_band, opp_status
+            ORDER BY region, plus_started_month, path_category, gmv_band, opp_status
         `;
         
         
@@ -644,6 +673,7 @@
         
         let volumeChart = null;
         let matchRateChart = null;
+        let oppsRateChart = null;
         let gmvChart = null;
         
         // Global data storage for filtering
@@ -726,10 +756,14 @@
                     month: row.month,
                     path_category: row.path_category || 'Unknown',
                     gmv_band: row.gmv_band || 'Unknown',
+                    opp_status: row.opp_status || 'No Opp',
                     total_activations: parseInt(row.total_activations) || 0,
                     in_bob_count: parseInt(row.in_bob_count) || 0,
                     in_bob_rate_pct: parseFloat(row.in_bob_rate_pct) || 0,
-                    median_gmv: parseFloat(row.median_gmv) || 0
+                    median_gmv: parseFloat(row.median_gmv) || 0,
+                    has_opp_count: parseInt(row.has_opp_count) || 0,
+                    has_cw_opp_count: parseInt(row.has_cw_opp_count) || 0,
+                    has_cl_opp_count: parseInt(row.has_cl_opp_count) || 0
                 }));
                 
                 authSection.style.display = 'none';
@@ -759,7 +793,7 @@
         // Dashboard Rendering
         // ===========================================
         
-        function renderDashboard(chartData, selectedRegions = null, selectedPaths = null, selectedGmvBands = null) {
+        function renderDashboard(chartData, selectedRegions = null, selectedPaths = null, selectedGmvBands = null, selectedOppStatuses = null) {
             // Store globally for filtering
             globalChartData = chartData;
             
@@ -773,12 +807,16 @@
             if (!selectedGmvBands) {
                 selectedGmvBands = ['<1M', '1M-5M', '5M-10M', '10M+', 'N/A'];
             }
+            if (!selectedOppStatuses) {
+                selectedOppStatuses = ['Has CW Opp', 'Has Opp', 'No Opp'];
+            }
             
             // Filter data
             const filteredChartData = chartData.filter(d => 
                 selectedRegions.includes(d.region) && 
                 selectedPaths.includes(d.path_category) &&
-                selectedGmvBands.includes(d.gmv_band)
+                selectedGmvBands.includes(d.gmv_band) &&
+                selectedOppStatuses.includes(d.opp_status)
             );
             
             const months = [...new Set(filteredChartData.map(d => d.month))].sort();
@@ -799,6 +837,7 @@
             // Render charts
             renderVolumeChart(filteredChartData, months, pathCategories);
             renderBobRateChart(filteredChartData, months, pathCategories);
+            renderOppsRateChart(filteredChartData, months);
             renderGmvChart(filteredChartData, months, pathCategories);
         }
         
@@ -806,9 +845,10 @@
             const selectedRegions = Array.from(document.querySelectorAll('#regionFilter input:checked')).map(cb => cb.value);
             const selectedPaths = Array.from(document.querySelectorAll('#pathFilter input:checked')).map(cb => cb.value);
             const selectedGmvBands = Array.from(document.querySelectorAll('#gmvBandFilter input:checked')).map(cb => cb.value);
+            const selectedOppStatuses = Array.from(document.querySelectorAll('#oppStatusFilter input:checked')).map(cb => cb.value);
             
             if (globalChartData) {
-                renderDashboard(globalChartData, selectedRegions, selectedPaths, selectedGmvBands);
+                renderDashboard(globalChartData, selectedRegions, selectedPaths, selectedGmvBands, selectedOppStatuses);
             }
         }
         
@@ -1034,6 +1074,119 @@
             }
             
             matchRateChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: months, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                color: '#888',
+                                font: { family: 'Space Mono', size: 10 },
+                                usePointStyle: true,
+                                padding: 12,
+                                boxWidth: 8
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y || 'N/A') + '%'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#666', font: { family: 'Space Mono', size: 10 } }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: {
+                                color: '#666',
+                                font: { family: 'Space Mono', size: 10 },
+                                callback: v => v + '%'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderOppsRateChart(chartData, months) {
+            const ctx = document.getElementById('oppsRateChart').getContext('2d');
+            
+            if (oppsRateChart) oppsRateChart.destroy();
+            
+            // Calculate opportunity rates aggregated across all dimensions
+            const hasOppData = months.map(m => {
+                const rows = chartData.filter(d => d.month === m);
+                const total = rows.reduce((sum, d) => sum + d.total_activations, 0);
+                const hasOpp = rows.reduce((sum, d) => sum + d.has_opp_count, 0);
+                return total > 0 ? (100.0 * hasOpp / total).toFixed(1) : null;
+            });
+            
+            const hasCwOppData = months.map(m => {
+                const rows = chartData.filter(d => d.month === m);
+                const total = rows.reduce((sum, d) => sum + d.total_activations, 0);
+                const hasCwOpp = rows.reduce((sum, d) => sum + d.has_cw_opp_count, 0);
+                return total > 0 ? (100.0 * hasCwOpp / total).toFixed(1) : null;
+            });
+            
+            const hasClOppData = months.map(m => {
+                const rows = chartData.filter(d => d.month === m);
+                const total = rows.reduce((sum, d) => sum + d.total_activations, 0);
+                const hasClOpp = rows.reduce((sum, d) => sum + d.has_cl_opp_count, 0);
+                return total > 0 ? (100.0 * hasClOpp / total).toFixed(1) : null;
+            });
+            
+            const datasets = [
+                {
+                    label: '% Has Opp',
+                    data: hasOppData,
+                    borderColor: '#4cc9f0',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#4cc9f0',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    spanGaps: true
+                },
+                {
+                    label: '% Has CW Opp',
+                    data: hasCwOppData,
+                    borderColor: '#06d6a0',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#06d6a0',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    spanGaps: true
+                },
+                {
+                    label: '% Has CL Opp',
+                    data: hasClOppData,
+                    borderColor: '#f72585',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#f72585',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    spanGaps: true
+                }
+            ];
+            
+            oppsRateChart = new Chart(ctx, {
                 type: 'line',
                 data: { labels: months, datasets },
                 options: {
