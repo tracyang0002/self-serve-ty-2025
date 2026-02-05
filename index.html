@@ -440,6 +440,7 @@
                         <label class="filter-checkbox"><input type="checkbox" value="1M-5M" checked onchange="applyFilters()"> 1M-5M</label>
                         <label class="filter-checkbox"><input type="checkbox" value="5M-10M" checked onchange="applyFilters()"> 5M-10M</label>
                         <label class="filter-checkbox"><input type="checkbox" value="10M+" checked onchange="applyFilters()"> 10M+</label>
+                        <label class="filter-checkbox"><input type="checkbox" value="N/A" checked onchange="applyFilters()"> N/A</label>
                     </div>
                 </div>
             </div>
@@ -575,11 +576,12 @@
                 br.primary_shop_plus_started_on_gmv_usd_l365d,
                 br.estimated_annualized_gmv,
                 CASE
+                  WHEN br.estimated_annualized_gmv IS NULL THEN 'N/A'
                   WHEN br.estimated_annualized_gmv < 1000000 THEN '<1M'
                   WHEN br.estimated_annualized_gmv >= 1000000 AND br.estimated_annualized_gmv < 5000000 THEN '1M-5M'
                   WHEN br.estimated_annualized_gmv >= 5000000 AND br.estimated_annualized_gmv < 10000000 THEN '5M-10M'
                   WHEN br.estimated_annualized_gmv >= 10000000 THEN '10M+'
-                  ELSE 'Unknown'
+                  ELSE 'N/A'
                 END AS gmv_band,
                 br.activation_type,
                 br.contract_type,
@@ -769,7 +771,7 @@
                 selectedPaths = ['Self-serve Trial', 'Self-serve Admin', 'Non Self-Serve'];
             }
             if (!selectedGmvBands) {
-                selectedGmvBands = ['<1M', '1M-5M', '5M-10M', '10M+'];
+                selectedGmvBands = ['<1M', '1M-5M', '5M-10M', '10M+', 'N/A'];
             }
             
             // Filter data
