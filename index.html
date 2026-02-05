@@ -433,6 +433,15 @@
                         <label class="filter-checkbox"><input type="checkbox" value="Non Self-Serve" checked onchange="applyFilters()"> Non Self-Serve</label>
                     </div>
                 </div>
+                <div>
+                    <label style="font-family: 'Space Mono', monospace; font-size: 0.75rem; color: #888; display: block; margin-bottom: 8px;">ESTIMATED GMV BAND (multi-select)</label>
+                    <div id="gmvBandFilter" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <label class="filter-checkbox"><input type="checkbox" value="<1M" checked onchange="applyFilters()"> &lt;1M</label>
+                        <label class="filter-checkbox"><input type="checkbox" value="1M-5M" checked onchange="applyFilters()"> 1M-5M</label>
+                        <label class="filter-checkbox"><input type="checkbox" value="5M-10M" checked onchange="applyFilters()"> 5M-10M</label>
+                        <label class="filter-checkbox"><input type="checkbox" value="10M+" checked onchange="applyFilters()"> 10M+</label>
+                    </div>
+                </div>
             </div>
             
             <!-- Volume Chart -->
@@ -565,6 +574,13 @@
                 FORMAT_DATE('%Y-%m', br.plus_started_on) AS plus_started_month,
                 br.primary_shop_plus_started_on_gmv_usd_l365d,
                 br.estimated_annualized_gmv,
+                CASE
+                  WHEN br.estimated_annualized_gmv < 1000000 THEN '<1M'
+                  WHEN br.estimated_annualized_gmv >= 1000000 AND br.estimated_annualized_gmv < 5000000 THEN '1M-5M'
+                  WHEN br.estimated_annualized_gmv >= 5000000 AND br.estimated_annualized_gmv < 10000000 THEN '5M-10M'
+                  WHEN br.estimated_annualized_gmv >= 10000000 THEN '10M+'
+                  ELSE 'Unknown'
+                END AS gmv_band,
                 br.activation_type,
                 br.contract_type,
                 br.path_category,
@@ -597,13 +613,14 @@
               region,
               plus_started_month AS month,
               path_category,
+              gmv_band,
               COUNT(DISTINCT organization_id) AS total_activations,
               COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) AS in_bob_count,
               ROUND(100.0 * COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) / COUNT(DISTINCT organization_id), 1) AS in_bob_rate_pct,
               ROUND(APPROX_QUANTILES(estimated_annualized_gmv, 2)[OFFSET(1)], 0) AS median_gmv
             FROM activation_detail
-            GROUP BY region, plus_started_month, path_category
-            ORDER BY region, plus_started_month, path_category
+            GROUP BY region, plus_started_month, path_category, gmv_band
+            ORDER BY region, plus_started_month, path_category, gmv_band
         `;
         
         
@@ -706,6 +723,7 @@
                     region: row.region || 'Unknown',
                     month: row.month,
                     path_category: row.path_category || 'Unknown',
+                    gmv_band: row.gmv_band || 'Unknown',
                     total_activations: parseInt(row.total_activations) || 0,
                     in_bob_count: parseInt(row.in_bob_count) || 0,
                     in_bob_rate_pct: parseFloat(row.in_bob_rate_pct) || 0,
@@ -739,7 +757,7 @@
         // Dashboard Rendering
         // ===========================================
         
-        function renderDashboard(chartData, selectedRegions = null, selectedPaths = null) {
+        function renderDashboard(chartData, selectedRegions = null, selectedPaths = null, selectedGmvBands = null) {
             // Store globally for filtering
             globalChartData = chartData;
             
@@ -750,10 +768,15 @@
             if (!selectedPaths) {
                 selectedPaths = ['Self-serve Trial', 'Self-serve Admin', 'Non Self-Serve'];
             }
+            if (!selectedGmvBands) {
+                selectedGmvBands = ['<1M', '1M-5M', '5M-10M', '10M+'];
+            }
             
             // Filter data
             const filteredChartData = chartData.filter(d => 
-                selectedRegions.includes(d.region) && selectedPaths.includes(d.path_category)
+                selectedRegions.includes(d.region) && 
+                selectedPaths.includes(d.path_category) &&
+                selectedGmvBands.includes(d.gmv_band)
             );
             
             const months = [...new Set(filteredChartData.map(d => d.month))].sort();
@@ -780,9 +803,10 @@
         function applyFilters() {
             const selectedRegions = Array.from(document.querySelectorAll('#regionFilter input:checked')).map(cb => cb.value);
             const selectedPaths = Array.from(document.querySelectorAll('#pathFilter input:checked')).map(cb => cb.value);
+            const selectedGmvBands = Array.from(document.querySelectorAll('#gmvBandFilter input:checked')).map(cb => cb.value);
             
             if (globalChartData) {
-                renderDashboard(globalChartData, selectedRegions, selectedPaths);
+                renderDashboard(globalChartData, selectedRegions, selectedPaths, selectedGmvBands);
             }
         }
         
