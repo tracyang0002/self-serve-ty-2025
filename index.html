@@ -471,7 +471,7 @@
                 <div class="chart-header">
                     <div>
                     <h2 class="chart-title">💰 Average GMV by Path</h2>
-                    <p class="chart-subtitle">Avg L365d GMV (USD) at Plus activation</p>
+                    <p class="chart-subtitle">Avg Estimated Annualized GMV (USD) at Plus activation</p>
                     </div>
                 </div>
                 <div class="chart-container">
@@ -616,7 +616,7 @@
               COUNT(DISTINCT organization_id) AS total_activations,
               COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) AS in_bob_count,
               ROUND(100.0 * COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) / COUNT(DISTINCT organization_id), 1) AS in_bob_rate_pct,
-              ROUND(AVG(primary_shop_plus_started_on_gmv_usd_l365d), 0) AS avg_gmv
+              ROUND(AVG(estimated_annualized_gmv), 0) AS avg_gmv
             FROM activation_detail
             GROUP BY region, plus_started_month, path_category
             ORDER BY region, plus_started_month, path_category
