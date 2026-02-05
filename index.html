@@ -479,22 +479,6 @@
                 </div>
             </div>
             
-            <!-- Leads Self-Serve Rate Chart -->
-            <div class="chart-section">
-                <div class="chart-header">
-                    <div>
-                        <h2 class="chart-title">Plus Leads Volume since Jan 01, 2025</h2>
-                        <p class="chart-subtitle">Daily lead count by region</p>
-                    </div>
-                </div>
-                <div class="chart-container">
-                    <canvas id="leadsChart"></canvas>
-                </div>
-                <div class="insight-box" id="leads-insight">
-                    <div class="insight-title">💡 Leads Insight</div>
-                    <div class="insight-text" id="leads-insight-text">Loading...</div>
-                </div>
-            </div>
             
         </div>
         
@@ -622,20 +606,6 @@
             ORDER BY region, plus_started_month, path_category
         `;
         
-        // Query for leads volume by region (daily from 2025)
-        const LEADS_QUERY = `
-            SELECT 
-              FORMAT_DATE('%Y-%m-%d', created_at) AS created_date,
-              CASE WHEN reporting_region IN ('AMER', 'LATAM') OR reporting_region IS NULL THEN 'AMER' ELSE reporting_region END AS region,
-              routing_segment,
-              COUNT(lead_id) AS lead_cnt
-            FROM \`shopify-dw.sales.sales_leads\`
-            WHERE primary_product_interest_at_lead_creation = 'Plus'
-              AND NOT is_shopify_customer
-              AND created_at >= '2025-01-01'
-            GROUP BY 1, 2, 3
-            ORDER BY 1, 2, 3
-        `;
         
         // Color palette for path categories
         const PATH_COLORS = {
@@ -656,11 +626,9 @@
         let volumeChart = null;
         let matchRateChart = null;
         let gmvChart = null;
-        let leadsChart = null;
         
         // Global data storage for filtering
         let globalChartData = null;
-        let globalLeadsData = null;
         
         // ===========================================
         // Initialization
@@ -732,11 +700,7 @@
             `;
             
             try {
-                // Fetch both queries in parallel
-                const [activationsResult, leadsResult] = await Promise.all([
-                    quick.dw.querySync(MATCH_RATE_QUERY, [], { timeoutMs: 60000, maxResults: 1000 }),
-                    quick.dw.querySync(LEADS_QUERY, [], { timeoutMs: 60000, maxResults: 1000 })
-                ]);
+                const activationsResult = await quick.dw.querySync(MATCH_RATE_QUERY, [], { timeoutMs: 60000, maxResults: 1000 });
                 
                 const chartData = activationsResult.results.map(row => ({
                     region: row.region || 'Unknown',
@@ -748,17 +712,10 @@
                     median_gmv: parseFloat(row.median_gmv) || 0
                 }));
                 
-                const leadsData = leadsResult.results.map(row => ({
-                    date: row.created_date,
-                    region: row.region || 'Unknown',
-                    routing_segment: row.routing_segment || 'Unknown',
-                    lead_cnt: parseInt(row.lead_cnt) || 0
-                }));
-                
                 authSection.style.display = 'none';
                 dashboardContent.style.display = 'block';
                 
-                renderDashboard(chartData, leadsData);
+                renderDashboard(chartData);
                 
                 document.getElementById('lastUpdated').textContent = 
                     `Last updated: ${new Date().toLocaleString()}`;
@@ -782,10 +739,9 @@
         // Dashboard Rendering
         // ===========================================
         
-        function renderDashboard(chartData, leadsData, selectedRegions = null, selectedPaths = null) {
+        function renderDashboard(chartData, selectedRegions = null, selectedPaths = null) {
             // Store globally for filtering
             globalChartData = chartData;
-            globalLeadsData = leadsData;
             
             // Get selected filters (default to all)
             if (!selectedRegions) {
@@ -819,15 +775,14 @@
             renderVolumeChart(filteredChartData, months, pathCategories);
             renderBobRateChart(filteredChartData, months, pathCategories);
             renderGmvChart(filteredChartData, months, pathCategories);
-            renderLeadsChart(leadsData, selectedRegions);
         }
         
         function applyFilters() {
             const selectedRegions = Array.from(document.querySelectorAll('#regionFilter input:checked')).map(cb => cb.value);
             const selectedPaths = Array.from(document.querySelectorAll('#pathFilter input:checked')).map(cb => cb.value);
             
-            if (globalChartData && globalLeadsData) {
-                renderDashboard(globalChartData, globalLeadsData, selectedRegions, selectedPaths);
+            if (globalChartData) {
+                renderDashboard(globalChartData, selectedRegions, selectedPaths);
             }
         }
         
@@ -1168,110 +1123,6 @@
             });
         }
         
-        function renderLeadsChart(leadsData, selectedRegions = ['AMER', 'EMEA', 'APAC']) {
-            const ctx = document.getElementById('leadsChart').getContext('2d');
-            
-            if (leadsChart) leadsChart.destroy();
-            
-            // Filter by selected regions
-            const filteredData = leadsData.filter(d => selectedRegions.includes(d.region));
-            
-            // Get unique dates and regions
-            const dates = [...new Set(filteredData.map(d => d.date))].sort();
-            const regions = selectedRegions.filter(r => filteredData.some(d => d.region === r));
-            
-            // Calculate total leads volume for each region and date
-            const datasets = regions.map(region => {
-                const data = dates.map(d => {
-                    const regionDateData = filteredData.filter(row => row.date === d && row.region === region);
-                    return regionDateData.reduce((sum, row) => sum + row.lead_cnt, 0);
-                });
-                return {
-                    label: region,
-                    data: data,
-                    borderColor: REGION_COLORS[region]?.border || '#888',
-                    backgroundColor: 'transparent',
-                    tension: 0.3,
-                    pointRadius: 3,
-                    pointHoverRadius: 6,
-                    pointBackgroundColor: REGION_COLORS[region]?.border || '#888',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    fill: false,
-                    spanGaps: true
-                };
-            });
-            
-            leadsChart = new Chart(ctx, {
-                type: 'line',
-                data: { labels: dates, datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { intersect: false, mode: 'index' },
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                            labels: {
-                                color: '#888',
-                                font: { family: 'Space Mono', size: 11 },
-                                usePointStyle: true,
-                                padding: 16
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y || 0).toLocaleString() + ' leads'
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { 
-                                color: '#666', 
-                                font: { family: 'Space Mono', size: 10 },
-                                maxTicksLimit: 15
-                            }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: {
-                                color: '#666',
-                                font: { family: 'Space Mono', size: 11 }
-                            }
-                        }
-                    }
-                }
-            });
-            
-            // Generate leads insight
-            generateLeadsInsight(filteredData, dates, regions);
-        }
-        
-        function generateLeadsInsight(leadsData, dates, regions) {
-            // Calculate total leads
-            const totalLeads = leadsData.reduce((sum, d) => sum + d.lead_cnt, 0);
-            
-            // Find region with highest volume
-            const regionVolumes = regions.map(region => {
-                const regionData = leadsData.filter(d => d.region === region);
-                const total = regionData.reduce((sum, d) => sum + d.lead_cnt, 0);
-                return { region, total };
-            }).sort((a, b) => b.total - a.total);
-            
-            const topRegion = regionVolumes[0];
-            const avgDaily = dates.length > 0 ? Math.round(totalLeads / dates.length) : 0;
-            
-            let insightText = `
-                <strong>${totalLeads.toLocaleString()}</strong> total Plus leads since Jan 2025.
-                Average <strong>${avgDaily.toLocaleString()}</strong> leads/day.
-                <strong>${topRegion?.region || 'N/A'}</strong> leads with <strong>${topRegion?.total?.toLocaleString() || 0}</strong> leads.
-            `;
-            
-            document.getElementById('leads-insight-text').innerHTML = insightText;
-        }
         
         function getBadgeClass(pathCategory) {
             const classes = {
