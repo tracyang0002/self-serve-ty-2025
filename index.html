@@ -470,8 +470,8 @@
             <div class="chart-section">
                 <div class="chart-header">
                     <div>
-                    <h2 class="chart-title">💰 Average GMV by Path</h2>
-                    <p class="chart-subtitle">Avg Estimated Annualized GMV (USD) at Plus activation</p>
+                    <h2 class="chart-title">💰 Median GMV by Path</h2>
+                    <p class="chart-subtitle">Median Estimated Annualized GMV (USD) at Plus activation</p>
                     </div>
                 </div>
                 <div class="chart-container">
@@ -616,7 +616,7 @@
               COUNT(DISTINCT organization_id) AS total_activations,
               COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) AS in_bob_count,
               ROUND(100.0 * COUNT(DISTINCT CASE WHEN in_bob = 1 THEN organization_id END) / COUNT(DISTINCT organization_id), 1) AS in_bob_rate_pct,
-              ROUND(AVG(estimated_annualized_gmv), 0) AS avg_gmv
+              ROUND(APPROX_QUANTILES(estimated_annualized_gmv, 2)[OFFSET(1)], 0) AS median_gmv
             FROM activation_detail
             GROUP BY region, plus_started_month, path_category
             ORDER BY region, plus_started_month, path_category
@@ -745,7 +745,7 @@
                     total_activations: parseInt(row.total_activations) || 0,
                     in_bob_count: parseInt(row.in_bob_count) || 0,
                     in_bob_rate_pct: parseFloat(row.in_bob_rate_pct) || 0,
-                    avg_gmv: parseFloat(row.avg_gmv) || 0
+                    median_gmv: parseFloat(row.median_gmv) || 0
                 }));
                 
                 const leadsData = leadsResult.results.map(row => ({
@@ -1101,13 +1101,13 @@
             
             if (gmvChart) gmvChart.destroy();
             
-            // Calculate weighted average GMV by path category
+            // Calculate weighted median GMV by path category
             const datasets = pathCategories.map(cat => {
                 const data = months.map(m => {
                     const rows = chartData.filter(d => d.month === m && d.path_category === cat);
-                    // Weighted average by activations
+                    // Weighted median by activations
                     const totalActivations = rows.reduce((sum, d) => sum + d.total_activations, 0);
-                    const weightedGmv = rows.reduce((sum, d) => sum + (d.avg_gmv * d.total_activations), 0);
+                    const weightedGmv = rows.reduce((sum, d) => sum + (d.median_gmv * d.total_activations), 0);
                     return totalActivations > 0 ? Math.round(weightedGmv / totalActivations) : null;
                 });
                 return {
