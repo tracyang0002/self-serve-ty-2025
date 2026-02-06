@@ -331,6 +331,9 @@ function renderDashboard(chartData, selectedRegions = null, selectedPaths = null
     
     // Render Self-Serve breakdown table (uses filtered data)
     renderSelfServeTable(filteredChartData);
+    
+    // Update TL;DR stats (uses unfiltered data for overall picture)
+    updateTldrStats(chartData);
 }
 
 function applyFilters() {
@@ -848,6 +851,42 @@ function renderTable(chartData) {
         `;
         tableBody.appendChild(tr);
     });
+}
+
+// ===========================================
+// TL;DR Stats
+// ===========================================
+
+function updateTldrStats(chartData) {
+    // Filter to self-serve only
+    const selfServeCategories = ['Self-serve Trial', 'Self-serve Admin'];
+    const selfServeData = chartData.filter(d => selfServeCategories.includes(d.path_category));
+    
+    // Calculate totals
+    const totalSelfServe = selfServeData.reduce((sum, d) => sum + d.total_activations, 0);
+    
+    // Without CW Opp
+    const withoutCwOpp = selfServeData.filter(d => d.opp_status !== 'Has CW Opp');
+    const totalWithoutCwOpp = withoutCwOpp.reduce((sum, d) => sum + d.total_activations, 0);
+    
+    // Without CW Opp AND high GMV (5M+) - using gmv_band_table
+    const highGmvBands = ['40M+', '5-40M'];
+    const highGmvNoCwOpp = withoutCwOpp.filter(d => highGmvBands.includes(d.gmv_band_table));
+    const totalHighGmvNoCwOpp = highGmvNoCwOpp.reduce((sum, d) => sum + d.total_activations, 0);
+    
+    // Calculate percentage
+    const pctOfSelfServe = totalSelfServe > 0 ? ((totalHighGmvNoCwOpp / totalSelfServe) * 100).toFixed(1) : 0;
+    
+    // Update DOM
+    const statTotalSs = document.getElementById('stat-total-ss');
+    const statNoCw = document.getElementById('stat-no-cw');
+    const statHighGmv = document.getElementById('stat-high-gmv');
+    const statPct = document.getElementById('stat-pct');
+    
+    if (statTotalSs) statTotalSs.textContent = totalSelfServe.toLocaleString();
+    if (statNoCw) statNoCw.textContent = totalWithoutCwOpp.toLocaleString();
+    if (statHighGmv) statHighGmv.textContent = totalHighGmvNoCwOpp.toLocaleString();
+    if (statPct) statPct.textContent = pctOfSelfServe + '%';
 }
 
 // ===========================================

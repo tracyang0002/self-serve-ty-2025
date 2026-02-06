@@ -25,6 +25,52 @@
 
         <!-- Dashboard Content (hidden until data loads) -->
         <div id="dashboard-content">
+            <!-- TL;DR Section -->
+            <div class="tldr-section" style="background: linear-gradient(135deg, rgba(6, 214, 160, 0.1), rgba(76, 201, 240, 0.1)); border: 1px solid rgba(6, 214, 160, 0.3); border-radius: 16px; padding: 28px 32px; margin-bottom: 40px;">
+                <h2 style="font-size: 1.3rem; color: #06d6a0; margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 1.5rem;">📊</span> TL;DR — Self-Serve Analysis
+                </h2>
+                
+                <p style="font-size: 0.95rem; line-height: 1.7; color: #ccc; margin-bottom: 16px;">
+                    Out of the overall self-serve population (Trial + Admin paths) in 2025, when we layer by GMV, <strong style="color: #06d6a0;">the overlap with sales is not concerning</strong>:
+                </p>
+                
+                <div id="tldr-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                    <div style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 16px;">
+                        <div style="font-family: 'Space Mono', monospace; font-size: 0.7rem; color: #888; text-transform: uppercase; margin-bottom: 4px;">Total Self-Serve</div>
+                        <div id="stat-total-ss" style="font-size: 1.5rem; font-weight: 700; color: #00f5d4;">--</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 16px;">
+                        <div style="font-family: 'Space Mono', monospace; font-size: 0.7rem; color: #888; text-transform: uppercase; margin-bottom: 4px;">w/o CW Opp</div>
+                        <div id="stat-no-cw" style="font-size: 1.5rem; font-weight: 700; color: #4cc9f0;">--</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 16px;">
+                        <div style="font-family: 'Space Mono', monospace; font-size: 0.7rem; color: #888; text-transform: uppercase; margin-bottom: 4px;">w/o CW Opp & GMV 5M+</div>
+                        <div id="stat-high-gmv" style="font-size: 1.5rem; font-weight: 700; color: #f72585;">--</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 16px;">
+                        <div style="font-family: 'Space Mono', monospace; font-size: 0.7rem; color: #888; text-transform: uppercase; margin-bottom: 4px;">% of Self-Serve</div>
+                        <div id="stat-pct" style="font-size: 1.5rem; font-weight: 700; color: #ffd60a;">--</div>
+                    </div>
+                </div>
+
+                <h3 style="font-size: 1rem; color: #4cc9f0; margin: 24px 0 12px 0;">📐 Methodology</h3>
+                <ul style="list-style: none; padding: 0; margin: 0;">
+                    <li style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; font-size: 0.85rem; color: #ccc;">
+                        <span style="color: #4cc9f0; font-weight: bold;">BOB Match:</span>
+                        <span>Account was in a sales territory <strong style="color: #fff;">before</strong> the Plus activation date (most recent territory snapshot prior to activation).</span>
+                    </li>
+                    <li style="display: flex; align-items: flex-start; gap: 12px; font-size: 0.85rem; color: #ccc;">
+                        <span style="color: #4cc9f0; font-weight: bold;">Opp Match:</span>
+                        <span>Any Plus opportunity associated with the Salesforce account (matched on account_id, filtered to Plus product). No date window constraint.</span>
+                    </li>
+                    <li style="display: flex; align-items: flex-start; gap: 12px; font-size: 0.85rem; color: #ccc;">
+                        <span style="color: #4cc9f0; font-weight: bold;">GMV:</span>
+                        <span>Estimated annualized GMV from <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">plus_deal_daily_annualized_gmv</code> on activation date.</span>
+                    </li>
+                </ul>
+            </div>
+
             <!-- Filters -->
             <div class="filter-section" style="margin-bottom: 30px; display: flex; gap: 30px; flex-wrap: wrap; align-items: center;">
                 <div>
