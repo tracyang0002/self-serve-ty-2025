@@ -858,9 +858,10 @@ function renderSelfServeTable(chartData) {
     const tableBody = document.getElementById('selfServeTableBody');
     if (!tableBody) return;
     
-    // Filter to self-serve only (Trial + Admin)
+    // Filter by path category
     const selfServeCategories = ['Self-serve Trial', 'Self-serve Admin'];
     const selfServeData = chartData.filter(d => selfServeCategories.includes(d.path_category));
+    const nonSelfServeData = chartData.filter(d => d.path_category === 'Non Self-Serve');
     
     // Get all months sorted
     const months = [...new Set(chartData.map(d => d.month))].sort();
@@ -881,27 +882,45 @@ function renderSelfServeTable(chartData) {
     // Build table rows
     let html = '';
     
-    // Row 1: Total Self-Serve
+    // Row 1: Total Plus Activations (all data)
+    html += '<tr class="row-total-all">';
+    html += '<td class="row-label"><strong>Total Plus Activations</strong></td>';
+    months.forEach(m => {
+        html += `<td><strong>${calcTotal(chartData, m).toLocaleString()}</strong></td>`;
+    });
+    html += `<td class="col-total"><strong>${calcTotal(chartData).toLocaleString()}</strong></td>`;
+    html += '</tr>';
+    
+    // Row 2: Non Self-Serve
+    html += '<tr class="row-non-self-serve">';
+    html += '<td class="row-label indent-1">Non Self-Serve</td>';
+    months.forEach(m => {
+        html += `<td>${calcTotal(nonSelfServeData, m).toLocaleString()}</td>`;
+    });
+    html += `<td class="col-total">${calcTotal(nonSelfServeData).toLocaleString()}</td>`;
+    html += '</tr>';
+    
+    // Row 3: Total Self-Serve
     html += '<tr class="row-total">';
-    html += '<td class="row-label">Total Self-Serve</td>';
+    html += '<td class="row-label indent-1">Total Self-Serve</td>';
     months.forEach(m => {
         html += `<td>${calcTotal(selfServeData, m).toLocaleString()}</td>`;
     });
     html += `<td class="col-total">${calcTotal(selfServeData).toLocaleString()}</td>`;
     html += '</tr>';
     
-    // Row 2: w CW Opps
+    // Row 4: w CW Opps
     html += '<tr class="row-sub">';
-    html += '<td class="row-label indent-1">w CW Opps</td>';
+    html += '<td class="row-label indent-2">w CW Opps</td>';
     months.forEach(m => {
         html += `<td>${calcTotal(withCwOpp, m).toLocaleString()}</td>`;
     });
     html += `<td class="col-total">${calcTotal(withCwOpp).toLocaleString()}</td>`;
     html += '</tr>';
     
-    // Row 3: w/o CW Opps
+    // Row 5: w/o CW Opps
     html += '<tr class="row-sub">';
-    html += '<td class="row-label indent-1"><strong>w/o CW Opps</strong></td>';
+    html += '<td class="row-label indent-2"><strong>w/o CW Opps</strong></td>';
     months.forEach(m => {
         html += `<td><strong>${calcTotal(withoutCwOpp, m).toLocaleString()}</strong></td>`;
     });
@@ -912,7 +931,7 @@ function renderSelfServeTable(chartData) {
     gmvBandsTable.forEach(band => {
         const bandData = withoutCwOpp.filter(d => d.gmv_band_table === band);
         html += '<tr class="row-gmv-band">';
-        html += `<td class="row-label indent-2">${band}</td>`;
+        html += `<td class="row-label indent-3">${band}</td>`;
         months.forEach(m => {
             html += `<td>${calcTotal(bandData, m).toLocaleString()}</td>`;
         });

@@ -407,14 +407,27 @@ footer {
     z-index: 1;
 }
 
+.self-serve-table .row-total-all {
+    background: rgba(123, 44, 191, 0.15);
+}
+
+.self-serve-table .row-total-all td {
+    font-weight: 700;
+    color: #b388ff;
+    border-bottom: 2px solid rgba(123, 44, 191, 0.4);
+}
+
+.self-serve-table .row-non-self-serve td {
+    color: #ff9f1c;
+}
+
 .self-serve-table .row-total {
     background: rgba(0, 245, 212, 0.08);
 }
 
 .self-serve-table .row-total td {
-    font-weight: 700;
     color: #00f5d4;
-    border-bottom: 2px solid rgba(0, 245, 212, 0.3);
+    border-bottom: 1px solid rgba(0, 245, 212, 0.3);
 }
 
 .self-serve-table .row-sub td {
@@ -432,6 +445,10 @@ footer {
 
 .self-serve-table .indent-2 {
     padding-left: 48px;
+}
+
+.self-serve-table .indent-3 {
+    padding-left: 72px;
     font-style: italic;
 }
 
