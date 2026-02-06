@@ -329,8 +329,8 @@ function renderDashboard(chartData, selectedRegions = null, selectedPaths = null
     renderOppsRateChart(filteredChartData, months);
     renderGmvChart(filteredChartData, months, pathCategories);
     
-    // Render Self-Serve breakdown table (uses all data, not filtered)
-    renderSelfServeTable(chartData);
+    // Render Self-Serve breakdown table (uses filtered data)
+    renderSelfServeTable(filteredChartData);
 }
 
 function applyFilters() {
